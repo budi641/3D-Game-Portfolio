@@ -169,6 +169,7 @@ const Statue = ({
   const hoverAmountRef = useRef(0)
   const worldPosRef = useRef(new THREE.Vector3())
   const targetScaleRef = useRef(new THREE.Vector3(1, 1, 1))
+  const scaleInitialized = useRef(false)
   const playerDirRef = useRef(new THREE.Vector3())
   const frameSkip = useRef(0)
 
@@ -492,7 +493,6 @@ const Statue = ({
   const renderStatueVisual = useMemo(() => {
     const modelConfig = TYPE_MODEL_MAP[type] || TYPE_MODEL_MAP.projects
     const resolvedModelUrl = modelUrl || ''
-    const scale = modelScale ?? modelConfig.scale ?? 0.3
 
     if (!resolvedModelUrl) return null
 
@@ -503,7 +503,7 @@ const Statue = ({
             url={resolvedModelUrl}
             position={modelPosition ?? [0, 0.35, 0]}
             rotation={modelRotation ?? [0, modelConfig.rotationY ?? 0, 0]}
-            scale={scale}
+            scale={1}
             playAnimation={(modelAnimated ?? false) && nearby}
             clipName={animationClip}
             forceOpaque={!allowTransparency}
@@ -514,10 +514,17 @@ const Statue = ({
     )
   }, [type, modelUrl, modelScale, modelRotation, modelPosition, modelAnimated, animationClip, allowTransparency, renderStyle, nearby, color])
 
+  const baseScale = modelScale ?? (TYPE_MODEL_MAP[type] || TYPE_MODEL_MAP.projects).scale ?? 0.3
+
   useFrame((state, delta) => {
+    // Set correct scale immediately on first frame (before frame skip) so models don't lerp from 1
+    if (groupRef.current && !scaleInitialized.current) {
+      scaleInitialized.current = true
+      groupRef.current.scale.set(baseScale, baseScale, baseScale)
+    }
     if (performanceTier === 'low') {
       frameSkip.current++
-      if (frameSkip.current % 3 !== 0) return
+      if (frameSkip.current % 4 !== 0) return
     }
     const player = state.scene.getObjectByName('player')
     if (player && groupRef.current) {
@@ -545,9 +552,10 @@ const Statue = ({
     hoverAmountRef.current = THREE.MathUtils.damp(hoverAmountRef.current, hoverTarget, 11, delta)
 
     if (groupRef.current) {
-      // Idle: 1.0, near: 1.255x, hover: extra subtle boost.
-      const targetScale = 1 + nearAmountRef.current * 0.255 + hoverAmountRef.current * 0.085
-      targetScaleRef.current.set(targetScale, targetScale, targetScale)
+      // Idle: baseScale, near: 1.255x, hover: extra subtle boost. Apply model scale to group.
+      const proximityScale = 1 + nearAmountRef.current * 0.255 + hoverAmountRef.current * 0.085
+      const combinedScale = baseScale * proximityScale
+      targetScaleRef.current.set(combinedScale, combinedScale, combinedScale)
       const lerpAlpha = 1 - Math.exp(-10 * delta)
       groupRef.current.scale.lerp(targetScaleRef.current, lerpAlpha)
     }
@@ -598,7 +606,7 @@ const Statue = ({
         <group ref={coreRef}>
           {renderStatueVisual}
           <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.33, 0]}>
-            <ringGeometry args={[1.1, 1.58, 56]} />
+            <ringGeometry args={[1.1, 1.58, performanceTier === 'low' ? 24 : 56]} />
             <meshBasicMaterial
               ref={ringMatRef}
               color={color}
@@ -635,7 +643,7 @@ const Statue = ({
         </Html>
       </group>
 
-      {/* Main Content Explorer Panel */}
+      {/* Main Content Explorer Panel - full viewport on mobile for proper fit */}
       <Html
         position={[5, 6, -2]}
         distanceFactor={12}
@@ -646,12 +654,14 @@ const Statue = ({
           transform: `scale(${isFocused ? 1 : 0.05}) translateX(${isFocused ? 0 : 100}px)`,
           pointerEvents: isFocused ? 'auto' : 'none',
           visibility: isFocused ? 'visible' : 'hidden',
-          width: 'min(92vw, 560px)',
-          height: 'min(82vh, 700px)'
+          width: 'min(96vw, 560px)',
+          height: 'min(90vh, 700px)',
+          maxWidth: '100vw',
+          maxHeight: '100dvh'
         }}
       >
         <div
-          className="w-[min(92vw,560px)] h-[min(82vh,700px)] ui-context-shell rounded-[34px] flex flex-col overflow-hidden relative"
+          className="w-full max-w-[min(96vw,560px)] h-full max-h-[min(90vh,700px)] min-h-0 ui-context-shell rounded-2xl sm:rounded-[34px] flex flex-col overflow-hidden relative"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
           style={{
@@ -661,7 +671,7 @@ const Statue = ({
         >
           <div className="absolute inset-0 ui-aurora pointer-events-none opacity-50" />
           {/* Dashboard Header */}
-          <div className="p-6 sm:p-7 border-b border-white/10 flex justify-between items-center relative" style={{ backgroundColor: hexToRgba(color, 0.08) }}>
+          <div className="p-4 sm:p-7 border-b border-white/10 flex justify-between items-center relative shrink-0" style={{ backgroundColor: hexToRgba(color, 0.08) }}>
             <div className="absolute top-0 left-0 w-full h-1 opacity-20" style={{ backgroundColor: color }} />
 
             <div>
@@ -669,7 +679,7 @@ const Statue = ({
                 <div className="w-1.5 h-1.5 rounded-full animate-ping" style={{ backgroundColor: color }} />
                 <div className="text-[9px] font-mono tracking-[0.32em] uppercase opacity-50 text-white">Interactive Section Console</div>
               </div>
-              <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight uppercase tabular-nums">{name}</h2>
+              <h2 className="text-xl sm:text-4xl font-black text-white tracking-tight uppercase tabular-nums truncate max-w-[60vw] sm:max-w-none">{name}</h2>
             </div>
 
             <button
@@ -681,12 +691,12 @@ const Statue = ({
           </div>
 
           {/* Dynamic Scrollable Body */}
-          <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-6 custom-scrollbar scroll-smooth">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-7 space-y-6 custom-scrollbar scroll-smooth">
             {renderExplorerContent()}
           </div>
 
           {/* System Status Footer */}
-          <div className="p-4 sm:p-5 bg-black/50 border-t border-white/10 flex items-center justify-between">
+          <div className="p-3 sm:p-5 bg-black/50 border-t border-white/10 flex items-center justify-between shrink-0">
             <div className="flex flex-col gap-0.5">
               <div className="text-[8px] font-mono text-white/25 tracking-widest uppercase">Link State: Active</div>
               <div className="text-[8px] font-mono text-white/15">Updated: {new Date().toISOString()}</div>

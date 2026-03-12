@@ -106,54 +106,18 @@ function StylizedSky({ performanceTier }: { performanceTier: PerformanceTier }) 
   const createFallbackSkyTexture = useMemo(() => () => {
     const low = performanceTier === 'low'
     const canvas = document.createElement('canvas')
-    canvas.width = low ? 1024 : 2048
-    canvas.height = low ? 512 : 1024
+    canvas.width = low ? 512 : 1024
+    canvas.height = low ? 256 : 512
     const ctx = canvas.getContext('2d')
     if (!ctx) return null
 
-    const w = canvas.width
     const h = canvas.height
-
     const bg = ctx.createLinearGradient(0, 0, 0, h)
-    bg.addColorStop(0, '#2b4f8d')
-    bg.addColorStop(0.45, '#5f8bc0')
-    bg.addColorStop(0.8, '#9dc5ee')
-    bg.addColorStop(1, '#bfdcf7')
+    bg.addColorStop(0, '#1e3a5f')
+    bg.addColorStop(0.5, '#4a7ba7')
+    bg.addColorStop(1, '#87ceeb')
     ctx.fillStyle = bg
-    ctx.fillRect(0, 0, w, h)
-
-    const sunX = w * 0.73
-    const sunY = h * 0.26
-    const sunGlow = ctx.createRadialGradient(sunX, sunY, 20, sunX, sunY, 170)
-    sunGlow.addColorStop(0, 'rgba(255,245,205,1)')
-    sunGlow.addColorStop(0.25, 'rgba(255,232,166,0.9)')
-    sunGlow.addColorStop(0.65, 'rgba(255,220,150,0.35)')
-    sunGlow.addColorStop(1, 'rgba(255,220,150,0)')
-    ctx.fillStyle = sunGlow
-    ctx.beginPath()
-    ctx.arc(sunX, sunY, 170, 0, Math.PI * 2)
-    ctx.fill()
-
-    const drawCloud = (x: number, y: number, size: number, alpha: number) => {
-      const cloud = ctx.createRadialGradient(x, y, size * 0.2, x, y, size)
-      cloud.addColorStop(0, `rgba(255,255,255,${alpha})`)
-      cloud.addColorStop(0.6, `rgba(245,250,255,${alpha * 0.55})`)
-      cloud.addColorStop(1, 'rgba(245,250,255,0)')
-      ctx.fillStyle = cloud
-      ctx.beginPath()
-      ctx.arc(x, y, size, 0, Math.PI * 2)
-      ctx.fill()
-    }
-
-    // Static painted cloud clusters.
-    drawCloud(w * 0.2, h * 0.32, 120, 0.45)
-    drawCloud(w * 0.26, h * 0.35, 92, 0.4)
-    drawCloud(w * 0.33, h * 0.3, 110, 0.34)
-    drawCloud(w * 0.55, h * 0.24, 86, 0.32)
-    drawCloud(w * 0.6, h * 0.28, 116, 0.4)
-    drawCloud(w * 0.68, h * 0.38, 132, 0.42)
-    drawCloud(w * 0.78, h * 0.34, 88, 0.3)
-    drawCloud(w * 0.9, h * 0.3, 105, 0.36)
+    ctx.fillRect(0, 0, canvas.width, h)
 
     const tex = new THREE.CanvasTexture(canvas)
     tex.colorSpace = THREE.SRGBColorSpace
@@ -173,7 +137,7 @@ function StylizedSky({ performanceTier }: { performanceTier: PerformanceTier }) 
 
   if (!skyTexture) return null
 
-  const segments = performanceTier === 'low' ? 16 : 64
+  const segments = performanceTier === 'low' ? 24 : 64
   return (
     <mesh frustumCulled={false} renderOrder={-1000}>
       <sphereGeometry args={[520, segments, segments]} />
@@ -229,13 +193,19 @@ function LinkRelic({
   const relicWorldPos = useMemo(() => new THREE.Vector3(), [])
   const toPlayerRef = useMemo(() => new THREE.Vector3(), [])
   const targetScaleRef = useMemo(() => new THREE.Vector3(1, 1, 1), [])
+  const scaleInitialized = useRef(false)
   const interactionDistance = 14
   const transitionDistance = 20
 
   useFrame((state, delta) => {
+    // Set correct scale immediately on first frame (before frame skip) so models don't lerp from 1
+    if (modelGroupRef.current && !scaleInitialized.current) {
+      scaleInitialized.current = true
+      modelGroupRef.current.scale.set(modelScale, modelScale, modelScale)
+    }
     if (performanceTier === 'low') {
       frameSkip.current++
-      if (frameSkip.current % 3 !== 0) return
+      if (frameSkip.current % 4 !== 0) return
     }
     if (relicRef.current) {
       relicRef.current.getWorldPosition(relicWorldPos)
@@ -283,8 +253,9 @@ function LinkRelic({
       }
       modelGroupRef.current.position.y = modelPosition[1] + Math.sin(state.clock.elapsedTime * bobSpeed) * bobAmount
 
-      const targetScale = 1 + nearFactor * 0.255 + hoverAmountRef.current * 0.085
-      targetScaleRef.set(targetScale, targetScale, targetScale)
+      const proximityScale = 1 + nearFactor * 0.255 + hoverAmountRef.current * 0.085
+      const combinedScale = modelScale * proximityScale
+      targetScaleRef.set(combinedScale, combinedScale, combinedScale)
       const alpha = 1 - Math.exp(-10 * delta)
       modelGroupRef.current.scale.lerp(targetScaleRef, alpha)
     }
@@ -336,7 +307,7 @@ function LinkRelic({
           <meshStandardMaterial transparent opacity={0} />
         </mesh>
         <mesh ref={ringMeshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.38, 0]}>
-          <ringGeometry args={[0.9, 1.35, performanceTier === 'low' ? 24 : 44]} />
+          <ringGeometry args={[0.9, 1.35, performanceTier === 'low' ? 16 : 44]} />
           <meshBasicMaterial
             ref={ringMatRef}
             color={color}
@@ -354,7 +325,7 @@ function LinkRelic({
                   url={modelUrl}
                   position={modelPosition}
                   rotation={modelRotation}
-                  scale={modelScale}
+                  scale={1}
                   playAnimation={modelAnimated && nearby}
                   renderStyle={renderStyle}
                 />
@@ -409,7 +380,7 @@ function ScenePlacedModel({
   useFrame((state, delta) => {
     if (performanceTier === 'low') {
       frameSkip.current++
-      if (frameSkip.current % 3 !== 0) return
+      if (frameSkip.current % 4 !== 0) return
     }
     if (groupRef.current && item.autoRotate) {
       groupRef.current.rotation.x += rotateX * delta
@@ -469,6 +440,7 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
   const exploredStatueNames = useAppStore((state) => state.exploredStatueNames)
   const setTotalStatueCount = useAppStore((state) => state.setTotalStatueCount)
   const setPendingAchievement = useAppStore((state) => state.setPendingAchievement)
+  const extremeFpsMode = useAppStore((state) => state.extremeFpsMode)
   const { data, loading } = usePortfolioData()
   const renderStyle = (data?.scene?.renderStyle === 'pbr' ? 'pbr' : 'cel') as 'pbr' | 'cel'
   const sectionRadius = typeof data?.scene?.sectionRadius === 'number' ? data.scene.sectionRadius : 52
@@ -598,7 +570,7 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
       {/* Dark Base Ground - Lowered to prevent Z-fighting */}
       <RigidBody type="fixed" colliders={false} position={[0, -0.1, 0]}>
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow={performanceTier === 'high'}>
-          <circleGeometry args={[150, performanceTier === 'low' ? 32 : 64]} />
+          <circleGeometry args={[150, performanceTier === 'low' ? 24 : 64]} />
           <meshStandardMaterial color="#05070a" roughness={1} />
         </mesh>
         <CuboidCollider args={[150, 0.05, 150]} position={[0, -0.05, 0]} />
@@ -652,7 +624,7 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
                  
                  {/* Glowing Ring */}
                  <mesh position={[0, 0.051, 0]} rotation={[-Math.PI/2, 0, 0]}>
-                    <ringGeometry args={[4.3, 4.6, performanceTier === 'low' ? 32 : 64]} />
+                    <ringGeometry args={[4.3, 4.6, performanceTier === 'low' ? 24 : 64]} />
                     <meshStandardMaterial
                       color={section.color}
                       emissive={section.color}
@@ -689,6 +661,8 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
         )
       })}
 
+      {!extremeFpsMode && (
+        <>
       {/* Dedicated link plaza path + platform */}
       <RigidBody type="fixed" colliders={false} position={[0, 0.02, linkPathCenterZ]} rotation={[0, 0, 0]}>
         <mesh receiveShadow>
@@ -728,8 +702,10 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
           performanceTier={performanceTier}
         />
       ))}
+        </>
+      )}
 
-      {sceneModels.map((item: ScenePlacedModelConfig, idx: number) => (
+      {!extremeFpsMode && sceneModels.map((item: ScenePlacedModelConfig, idx: number) => (
         <ScenePlacedModel key={`${item.name || 'scene-model'}-${idx}`} item={item} renderStyle={renderStyle} performanceTier={performanceTier} />
       ))}
 

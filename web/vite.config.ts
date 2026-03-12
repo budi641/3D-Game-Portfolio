@@ -9,6 +9,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  resolve: {
+    alias: [
+      // Force exact 'sanity' import to use web's package (avoids studio's sanity 3.x)
+      { find: /^sanity$/, replacement: path.resolve(__dirname, 'node_modules/sanity') },
+    ],
+  },
   server: {
     fs: {
       allow: [path.resolve(__dirname, '..')],

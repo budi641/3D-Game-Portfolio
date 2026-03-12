@@ -6,10 +6,12 @@ import { useAppStore } from '../../store/appStore'
 import { Physics } from '@react-three/rapier'
 import Player from '../../world/Player'
 import { StatueIndicatorUpdater } from '../../world/StatueIndicatorUpdater'
+import { LoadingProgressReporter } from '../../world/LoadingProgressReporter'
 import { AdaptivePerformanceMonitor } from '../../world/AdaptivePerformanceMonitor'
 import { usePortfolioData } from '../../hooks/usePortfolioData'
 import { usePerformanceTier } from '../../hooks/usePerformanceTier'
 import QuestModal from '../ui/QuestModal'
+import MobileTutorial from '../ui/MobileTutorial'
 import AchievementToast from '../ui/AchievementToast'
 
 const keyboardMap = [
@@ -40,6 +42,7 @@ const GameMode = () => {
   return (
     <div className="w-full h-full min-h-[100dvh] relative">
       <QuestModal />
+      <MobileTutorial />
       <AchievementToast
         message={pendingAchievement?.message ?? ''}
         subtext={pendingAchievement?.subtext}
@@ -50,7 +53,7 @@ const GameMode = () => {
         <div className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }}>
         <Canvas
         shadows={false}
-        dpr={perfTier === 'low' ? [0.4, 1] : [1, 1]}
+        dpr={perfTier === 'low' ? [0.25, 1] : [1, 1]}
         gl={{
           antialias: false,
           powerPreference: 'high-performance',
@@ -60,6 +63,7 @@ const GameMode = () => {
         style={{ display: 'block', width: '100%', height: '100%' }}
       >
         <Physics debug={false} gravity={[0, -9.81, 0]} timeStep={1 / 60}>
+          <LoadingProgressReporter />
           <AdaptivePerformanceMonitor />
           <World performanceTier={perfTier} />
           <Player characterConfig={data?.character} performanceTier={perfTier} />

@@ -13,11 +13,11 @@
   },
   "dependencies": {
     "@sanity/cli": "^5.14.1",
-    "@sanity/color-input": "3",
+    "@sanity/color-input": "^6.0.4",
     "lucide-react": "latest",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
-    "sanity": "^3.0.0",
+    "sanity": "^5.14.1",
     "styled-components": "^6.0.0",
     "three": "^0.183.2"
   },

@@ -33,6 +33,11 @@ interface AppState {
   isLoaded: boolean
   setIsLoaded: (isLoaded: boolean) => void
 
+  /** Loading progress 0–100 from Canvas/useProgress. Only set when in game mode. */
+  loadingProgress: number
+  loadingActive: boolean
+  setLoadingProgress: (progress: number, active: boolean) => void
+
   respawnCount: number
   triggerRespawn: () => void
 
@@ -47,6 +52,12 @@ interface AppState {
 
   fps: number
   setFps: (fps: number) => void
+
+  extremeFpsMode: boolean
+  setExtremeFpsMode: (enabled: boolean) => void
+
+  mobileTutorialDismissed: boolean
+  setMobileTutorialDismissed: (dismissed: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -62,6 +73,8 @@ export const useAppStore = create<AppState>((set) => ({
         exploredStatueNames: mode === 'game' ? [] : state.exploredStatueNames,
         questDismissed: mode === 'game' ? false : state.questDismissed,
         performanceTier: mode === 'game' ? initialTier : state.performanceTier,
+        extremeFpsMode: mode === 'game' ? false : state.extremeFpsMode,
+        mobileTutorialDismissed: mode === 'game' ? false : state.mobileTutorialDismissed,
       }
     })
   },
@@ -89,6 +102,10 @@ export const useAppStore = create<AppState>((set) => ({
   isLoaded: false,
   setIsLoaded: (isLoaded) => set({ isLoaded }),
 
+  loadingProgress: 0,
+  loadingActive: true,
+  setLoadingProgress: (progress, active) => set({ loadingProgress: progress, loadingActive: active }),
+
   respawnCount: 0,
   triggerRespawn: () => set((state) => ({ respawnCount: state.respawnCount + 1 })),
 
@@ -103,4 +120,10 @@ export const useAppStore = create<AppState>((set) => ({
 
   performanceTier: 'low',
   setPerformanceTier: (tier) => set({ performanceTier: tier }),
+
+  extremeFpsMode: false,
+  setExtremeFpsMode: (enabled) => set({ extremeFpsMode: enabled }),
+
+  mobileTutorialDismissed: false,
+  setMobileTutorialDismissed: (dismissed) => set({ mobileTutorialDismissed: dismissed }),
 }))

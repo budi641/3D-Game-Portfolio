@@ -1,16 +1,16 @@
-import { useProgress } from '@react-three/drei'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../../store/appStore'
 
 const LoadingScreen = () => {
-  const { progress, active } = useProgress()
   const mode = useAppStore((state) => state.mode)
   const isLoaded = useAppStore((state) => state.isLoaded)
   const setIsLoaded = useAppStore((state) => state.setIsLoaded)
+  const loadingProgress = useAppStore((state) => state.loadingProgress)
+  const loadingActive = useAppStore((state) => state.loadingActive)
   const [shouldShow, setShouldShow] = useState(!isLoaded)
   const [bootStartedAt, setBootStartedAt] = useState(() => performance.now())
-  const safeProgress = Math.max(0, Math.min(100, Number.isFinite(progress) ? progress : (active ? 0 : 100)))
+  const safeProgress = Math.max(0, Math.min(100, Number.isFinite(loadingProgress) ? loadingProgress : (loadingActive ? 0 : 100)))
 
   useEffect(() => {
     if (isLoaded) {
@@ -27,7 +27,7 @@ const LoadingScreen = () => {
     const isGameMode = mode === 'game'
     const elapsed = performance.now() - bootStartedAt
     const hasLoadedBefore = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('game-scene-loaded') === '1'
-    const sceneReady = safeProgress >= 99 || !active
+    const sceneReady = isGameMode ? (safeProgress >= 99 || !loadingActive) : true
     const forcedReady = elapsed >= 8000
 
     if (isGameMode) {
@@ -54,7 +54,7 @@ const LoadingScreen = () => {
     }, waitMs + 200)
 
     return () => window.clearTimeout(timer)
-  }, [safeProgress, active, mode, isLoaded, setIsLoaded, bootStartedAt])
+  }, [safeProgress, loadingActive, mode, isLoaded, setIsLoaded, bootStartedAt])
 
   if (!shouldShow) return null
 

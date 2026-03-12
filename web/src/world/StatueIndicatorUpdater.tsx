@@ -29,7 +29,7 @@ export function StatueIndicatorUpdater({ performanceTier = 'high' }: { performan
   useFrame((state) => {
     if (performanceTier === 'low') {
       frameSkip.current++
-      if (frameSkip.current % 3 !== 0) return
+      if (frameSkip.current % 4 !== 0) return
     }
     const player = state.scene.getObjectByName('player')
     if (!player) return

@@ -22,8 +22,6 @@ const MAX_CAMERA_DISTANCE = 20
 const MOBILE_MIN_CAMERA_DISTANCE = 8
 const MOBILE_MAX_CAMERA_DISTANCE = 28
 const ROTATION_SENSITIVITY = 0.005
-const ZOOM_SENSITIVITY = 0.1
-
 const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig?: any; performanceTier?: PerformanceTier }) => {
   const rb = useRef<RapierRigidBody>(null)
   const meshRef = useRef<THREE.Group>(null)
@@ -35,13 +33,12 @@ const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig
   const walkSpeed = typeof characterConfig?.walkSpeed === 'number' ? characterConfig.walkSpeed : DEFAULT_WALK_SPEED
   const runSpeed = typeof characterConfig?.runSpeed === 'number' ? characterConfig.runSpeed : DEFAULT_RUN_SPEED
   const jumpForce = typeof characterConfig?.jumpForce === 'number' ? characterConfig.jumpForce : DEFAULT_JUMP_FORCE
-  const minCamDistance = isMobile ? MOBILE_MIN_CAMERA_DISTANCE : MIN_CAMERA_DISTANCE
   const maxCamDistance = isMobile ? MOBILE_MAX_CAMERA_DISTANCE : MAX_CAMERA_DISTANCE
 
-  // Camera Orbit State
+  // Camera Orbit State - distance fixed at max (no scroll zoom)
   const rotation = useRef({ x: 0, y: Math.PI }) // Orbit angles (smoothed)
   const rotationTarget = useRef({ x: 0, y: Math.PI }) // Target for touch smoothing
-  const distance = useRef(isMobile ? 14 : 10) // Camera distance
+  const distance = useRef(maxCamDistance) // Static at max; no scroll adjustment
   const isDragging = useRef(false)
   const lookTouchId = useRef<number | null>(null)
   const moveTouchId = useRef<number | null>(null)
@@ -59,11 +56,7 @@ const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig
         rotationTarget.current.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 6, rotationTarget.current.x - e.movementY * ROTATION_SENSITIVITY))
       }
     }
-    const handleWheel = (e: WheelEvent) => {
-      if (!focusedSection) {
-        distance.current = Math.max(minCamDistance, Math.min(maxCamDistance, distance.current + e.deltaY * ZOOM_SENSITIVITY * 0.01))
-      }
-    }
+    // Scroll wheel zoom removed - camera distance is static at max
     const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
     const joyRadius = 56
 
@@ -127,7 +120,6 @@ const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig
     window.addEventListener('mousedown', handleMouseDown)
     window.addEventListener('mouseup', handleMouseUp)
     window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('wheel', handleWheel)
     window.addEventListener('touchstart', handleTouchStart, { passive: true })
     window.addEventListener('touchmove', handleTouchMove, { passive: false })
     window.addEventListener('touchend', handleTouchEnd, { passive: true })
@@ -142,7 +134,7 @@ const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig
       window.removeEventListener('touchend', handleTouchEnd)
       window.removeEventListener('touchcancel', handleTouchCancel)
     }
-  }, [focusedSection, minCamDistance, maxCamDistance])
+  }, [focusedSection])
   
   const moveVec = useMemo(() => new THREE.Vector3(), [])
   const camDir = useMemo(() => new THREE.Vector3(), [])
@@ -317,7 +309,7 @@ const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig
     rayDir.subVectors(idealCamPos, smoothedPlayerPos.current).normalize()
     const rayLength = smoothedPlayerPos.current.distanceTo(idealCamPos)
 
-    const raycastInterval = performanceTier === 'low' ? 1 / 20 : 1 / 30
+    const raycastInterval = performanceTier === 'low' ? 1 / 15 : 1 / 30
     raycastAccumulator.current += dt
     if (raycastAccumulator.current >= raycastInterval) {
       raycastAccumulator.current = 0
