@@ -21,12 +21,18 @@
   font-family: var(--font-engine);
 }
 
+html {
+  height: 100%;
+  min-height: 100dvh;
+}
+
 body {
   margin: 0;
   padding: 0;
   overflow: hidden;
   width: 100vw;
-  height: 100vh;
+  height: 100%;
+  min-height: 100dvh;
 }
 
 #root {

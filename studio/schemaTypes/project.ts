@@ -48,6 +48,57 @@ export default {
       ],
     },
     {
+      name: 'media',
+      title: 'Project Media Library',
+      type: 'array',
+      group: 'media',
+      description: 'Playable videos and images shown in project cards/details.',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            {
+              name: 'type',
+              title: 'Media Type',
+              type: 'string',
+              options: {
+                list: [
+                  { title: 'Image', value: 'image' },
+                  { title: 'Video', value: 'video' },
+                ],
+              },
+              initialValue: 'image',
+            },
+            {
+              name: 'image',
+              title: 'Image',
+              type: 'image',
+              options: { hotspot: true },
+              hidden: ({ parent }: any) => parent?.type && parent.type !== 'image',
+            },
+            {
+              name: 'video',
+              title: 'Video',
+              type: 'file',
+              options: { accept: 'video/mp4,video/webm' },
+              hidden: ({ parent }: any) => parent?.type && parent.type !== 'video',
+            },
+            { name: 'caption', title: 'Caption', type: 'string' },
+          ],
+          preview: {
+            select: { title: 'caption', subtitle: 'type', media: 'image' },
+            prepare({ title, subtitle, media }: any) {
+              return {
+                title: title || 'Project media',
+                subtitle: subtitle || 'media',
+                media,
+              }
+            },
+          },
+        },
+      ],
+    },
+    {
       name: 'description',
       title: 'Project Narrative',
       type: 'text',
@@ -71,6 +122,41 @@ export default {
       type: 'boolean',
       group: 'meta',
       initialValue: false
+    },
+    {
+      name: 'links',
+      title: 'Project Links',
+      type: 'array',
+      group: 'meta',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            { name: 'label', title: 'Label', type: 'string' },
+            { name: 'url', title: 'URL', type: 'url' },
+            {
+              name: 'type',
+              title: 'Type',
+              type: 'string',
+              options: {
+                list: [
+                  { title: 'GitHub', value: 'github' },
+                  { title: 'Demo', value: 'demo' },
+                  { title: 'YouTube', value: 'youtube' },
+                  { title: 'Steam', value: 'steam' },
+                  { title: 'Itch', value: 'itch' },
+                  { title: 'Other', value: 'other' },
+                ],
+              },
+              initialValue: 'other',
+            },
+          ],
+          preview: {
+            select: { title: 'label', subtitle: 'url' },
+          },
+        },
+      ],
+      description: 'Unlimited project links.',
     },
     {
       name: 'order',

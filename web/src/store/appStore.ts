@@ -1,7 +1,16 @@
 import { create } from 'zustand'
 
 export type ExperienceMode = 'game' | 'normal'
-export type QualityLevel = 'low' | 'medium' | 'high'
+export type QualityLevel = 'low' | 'high'
+
+export interface StatueIndicator {
+  label: string
+  screenX: number
+  screenY: number
+  angle: number
+  visible: boolean
+  distance: number
+}
 
 interface AppState {
   mode: ExperienceMode
@@ -9,6 +18,21 @@ interface AppState {
   
   quality: QualityLevel
   setQuality: (quality: QualityLevel) => void
+
+  statueIndicators: StatueIndicator[]
+  setStatueIndicators: (indicators: StatueIndicator[]) => void
+
+  exploredStatueNames: string[]
+  addExploredStatue: (name: string) => void
+  resetExploredStatues: () => void
+  totalStatueCount: number
+  setTotalStatueCount: (count: number) => void
+
+  pendingAchievement: { message: string; subtext?: string; isBig?: boolean } | null
+  setPendingAchievement: (a: { message: string; subtext?: string; isBig?: boolean } | null) => void
+
+  questDismissed: boolean
+  setQuestDismissed: (dismissed: boolean) => void
   
   isLoaded: boolean
   setIsLoaded: (isLoaded: boolean) => void
@@ -24,17 +48,48 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  mode: (localStorage.getItem('portfolio-mode') as ExperienceMode) || 'normal',
+  mode: 'normal',
   setMode: (mode) => {
     localStorage.setItem('portfolio-mode', mode)
-    set({ mode })
+    set((state) => ({
+      ...state,
+      mode,
+      isLoaded: mode === 'game' ? false : state.isLoaded,
+      exploredStatueNames: mode === 'game' ? [] : state.exploredStatueNames,
+      questDismissed: mode === 'game' ? false : state.questDismissed,
+    }))
   },
   
-  quality: (localStorage.getItem('portfolio-quality') as QualityLevel) || 'high',
+  quality: (() => {
+    const stored = localStorage.getItem('portfolio-quality')
+    if (stored === 'low' || stored === 'high') return stored as QualityLevel
+    if (stored === 'medium') return 'high' as QualityLevel
+    return 'high'
+  })(),
   setQuality: (quality) => {
     localStorage.setItem('portfolio-quality', quality)
     set({ quality })
   },
+
+  statueIndicators: [],
+  setStatueIndicators: (indicators) => set({ statueIndicators: indicators }),
+
+  exploredStatueNames: [],
+  addExploredStatue: (name) =>
+    set((state) => {
+      if (state.exploredStatueNames.includes(name)) return state
+      return { exploredStatueNames: [...state.exploredStatueNames, name] }
+    }),
+  resetExploredStatues: () => set({ exploredStatueNames: [] }),
+
+  totalStatueCount: 7,
+  setTotalStatueCount: (count) => set({ totalStatueCount: count }),
+
+  pendingAchievement: null,
+  setPendingAchievement: (a) => set({ pendingAchievement: a }),
+
+  questDismissed: false,
+  setQuestDismissed: (dismissed) => set({ questDismissed: dismissed }),
   
   isLoaded: false,
   setIsLoaded: (isLoaded) => set({ isLoaded }),

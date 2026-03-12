@@ -8,7 +8,8 @@
     "start": "sanity start",
     "build": "sanity build",
     "deploy": "sanity deploy",
-    "graphql": "sanity graphql"
+    "graphql": "sanity graphql",
+    "migrate:old-portfolio": "node ./scripts/migrate-old-portfolio.mjs"
   },
   "dependencies": {
     "@sanity/cli": "^5.14.1",

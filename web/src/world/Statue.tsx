@@ -1,4 +1,4 @@
-import { Suspense, useRef, useState, useMemo } from 'react'
+import { Suspense, useRef, useState, useMemo, type FormEvent } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
@@ -7,6 +7,7 @@ import { X } from 'lucide-react'
 import CdnAnimatedModel from './CdnAnimatedModel'
 import ModelErrorBoundary from '../components/system/ModelErrorBoundary'
 import { urlFor } from '../lib/sanity'
+import { buildDisplaySkills, SkillIcon } from '../lib/skillsDisplay'
 
 function hexToRgba(hex: string, alpha: number) {
   const safe = (hex || '').trim().replace('#', '')
@@ -30,9 +31,80 @@ function experienceImage(exp: any, data: any) {
   return exp?.logo || exp?.image || exp?.mainImage || exp?.companyImage || data?.projects?.[0]?.mainImage || null
 }
 
+function portableToPlain(value: any): string {
+  if (!Array.isArray(value)) return ''
+  return value
+    .map((block: any) => {
+      if (!block || block._type !== 'block' || !Array.isArray(block.children)) return ''
+      return block.children.map((child: any) => child?.text || '').join('')
+    })
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+function youtubeEmbedUrl(url: string): string | null {
+  if (!url) return null
+  const clean = url.trim()
+  const short = clean.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/)
+  if (short?.[1]) return `https://www.youtube.com/embed/${short[1]}`
+  const full = clean.match(/[?&]v=([A-Za-z0-9_-]{6,})/)
+  if (full?.[1]) return `https://www.youtube.com/embed/${full[1]}`
+  return null
+}
+
+function monthToNum(v: string) {
+  const m = v.toLowerCase().slice(0, 3)
+  const map: Record<string, number> = {
+    jan: 0,
+    feb: 1,
+    mar: 2,
+    apr: 3,
+    may: 4,
+    jun: 5,
+    jul: 6,
+    aug: 7,
+    sep: 8,
+    oct: 9,
+    nov: 10,
+    dec: 11,
+  }
+  return typeof map[m] === 'number' ? map[m] : 0
+}
+
+function parsePeriodStart(period: string | undefined): number {
+  if (!period || typeof period !== 'string') return 0
+  const first = period.split('–')[0]?.trim() || period.split('-')[0]?.trim() || ''
+  const y = first.match(/\b(19|20)\d{2}\b/)
+  if (!y) return 0
+  const year = Number(y[0])
+  const monthToken = first.replace(y[0], '').trim().split(/\s+/)[0] || 'jan'
+  const month = monthToNum(monthToken)
+  return new Date(year, month, 1).getTime()
+}
+
+function groupedWork(experiences: any[]) {
+  const groups = new Map<string, { company: string; logo?: any; roles: any[] }>()
+  ;(experiences || []).forEach((exp) => {
+    const company = exp?.company || 'Unknown Company'
+    const key = company.toLowerCase().trim()
+    if (!groups.has(key)) groups.set(key, { company, logo: exp?.logo, roles: [] })
+    const g = groups.get(key)!
+    g.logo = g.logo || exp?.logo
+    g.roles.push(exp)
+  })
+
+  const arr = Array.from(groups.values())
+  arr.forEach((g) => {
+    g.roles.sort((a, b) => parsePeriodStart(b?.period) - parsePeriodStart(a?.period))
+  })
+  arr.sort((a, b) => parsePeriodStart(b.roles[0]?.period) - parsePeriodStart(a.roles[0]?.period))
+  return arr
+}
+
 interface StatueProps {
   position: [number, number, number]
   name: string
+  renderStyle?: 'pbr' | 'cel'
   type?: string
   color?: string
   data: any
@@ -63,6 +135,7 @@ const TYPE_MODEL_MAP: Record<string, { modelId: string; scale: number; rotationY
 const Statue = ({
   position,
   name,
+  renderStyle = 'pbr',
   type = 'projects',
   color = "#60a5fa",
   data,
@@ -81,15 +154,47 @@ const Statue = ({
 }: StatueProps) => {
   const [hovered, setHovered] = useState(false)
   const [nearby, setNearby] = useState(false)
+  const [contactSending, setContactSending] = useState(false)
+  const [contactStatus, setContactStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [contactForm, setContactForm] = useState({ name: '', email: '', subject: '', message: '' })
   const groupRef = useRef<THREE.Group>(null)
   const coreRef = useRef<THREE.Group>(null)
+  const ringRef = useRef<THREE.Mesh>(null)
+  const ringMatRef = useRef<THREE.MeshBasicMaterial>(null)
   const nearbyRef = useRef(false)
   const nearAmountRef = useRef(0)
+  const hoverAmountRef = useRef(0)
   const worldPosRef = useRef(new THREE.Vector3())
   const targetScaleRef = useRef(new THREE.Vector3(1, 1, 1))
+  const playerDirRef = useRef(new THREE.Vector3())
 
   const focusedSection = useAppStore((state) => state.focusedSection)
   const isFocused = focusedSection === name
+
+  const submitContact = async (e: FormEvent) => {
+    e.preventDefault()
+    const recipient = data?.siteSettings?.contactRecipientEmail || ''
+    if (!recipient) {
+      setContactStatus('error')
+      return
+    }
+    setContactSending(true)
+    setContactStatus('idle')
+    try {
+      const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(recipient)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(contactForm),
+      })
+      if (!res.ok) throw new Error('send failed')
+      setContactStatus('success')
+      setContactForm({ name: '', email: '', subject: '', message: '' })
+    } catch {
+      setContactStatus('error')
+    } finally {
+      setContactSending(false)
+    }
+  }
 
   // Helper to render section-specific content
   const renderExplorerContent = () => {
@@ -100,7 +205,7 @@ const Statue = ({
         return (
           <div className="space-y-4">
             {(data.projects || []).map((p: any) => (
-              <div key={p._id} className="p-5 ui-context-card group">
+              <div key={p._id} className={`p-5 ui-context-card group ${p?.featured ? 'border-amber-300/70 shadow-[0_0_20px_rgba(245,158,11,0.25)]' : ''}`}>
                 <div className="mb-4 h-36 rounded-xl overflow-hidden border border-white/10 bg-black/40 relative">
                   {imageUrl(p.mainImage, 640, 360) ? (
                     <img
@@ -120,6 +225,32 @@ const Statue = ({
                   <div className="px-2 py-0.5 bg-white/10 rounded text-[9px] font-mono text-white/50">{p.year || '2024'}</div>
                 </div>
                 <p className="text-xs text-white/50 line-clamp-2 mb-3 leading-relaxed">{p.description}</p>
+                {Array.isArray(p.links) &&
+                  p.links
+                    .map((l: any) => youtubeEmbedUrl(l?.url || ''))
+                    .filter(Boolean)
+                    .slice(0, 1)
+                    .map((embed: any, i: number) => (
+                      <div key={`yt-inline-${i}`} className="mb-3 rounded-lg overflow-hidden border border-white/10 bg-black/30">
+                        <iframe
+                          src={embed}
+                          title={`project-yt-${p._id}-${i}`}
+                          className="w-full h-40"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          allowFullScreen
+                        />
+                      </div>
+                    ))}
+                {Array.isArray(p.links) && p.links.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {p.links.slice(0, 3).map((l: any, idx: number) => (
+                      <a key={`${l?.url || 'link'}-${idx}`} href={l?.url || '#'} target="_blank" rel="noreferrer" className="text-[9px] px-2 py-1 rounded border border-white/10 bg-black/30 text-white/70">
+                        {l?.label || l?.type || 'link'}
+                      </a>
+                    ))}
+                  </div>
+                )}
                 <div className="flex gap-2 flex-wrap">
                   {(p.technologies || []).slice(0, 3).map((t: string) => (
                     <span key={t} className="text-[9px] font-mono opacity-40 px-2 py-0.5 border border-white/10 rounded" style={{ color }}>{t}</span>
@@ -131,54 +262,60 @@ const Statue = ({
         )
 
       case 'skills':
-        const categories = [...new Set((data.skills || []).map((s: any) => s.category))]
+        const mergedSkills = buildDisplaySkills(data.skills || [])
         return (
-          <div className="space-y-6">
-            {categories.map((cat: any) => (
-              <div key={cat as string} className="space-y-3">
-                <h3 className="text-[10px] font-mono tracking-[0.3em] uppercase opacity-40" style={{ color }}>{cat as string}</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {(data.skills || []).filter((s: any) => s.category === cat).map((s: any) => (
-                    <div key={s._id} className="p-3 ui-context-card flex items-center justify-between">
-                      <span className="text-xs font-medium text-white/80">{s.title}</span>
-                      <div className="w-10 h-1 bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full" style={{ width: `${s.level}%`, backgroundColor: color }} />
-                      </div>
-                    </div>
-                  ))}
+          <div className="grid grid-cols-2 gap-3">
+            {mergedSkills.map((s: any, idx: number) => (
+              <div key={s._id || `skill-${idx}`} className="p-3 ui-context-card flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-md border border-white/15 bg-slate-900/70 flex items-center justify-center">
+                  <SkillIcon title={s?.title || ''} className="w-3.5 h-3.5" />
                 </div>
+                <span className="text-xs font-medium text-white/80 leading-tight">{s.title}</span>
               </div>
             ))}
           </div>
         )
 
       case 'work':
+        const workGroups = groupedWork(data.experience || [])
         return (
           <div className="space-y-5">
-            {(data.experience || []).map((exp: any) => (
-              <div key={exp._id} className="relative p-4 ui-context-card">
+            {workGroups.map((companyGroup: any) => (
+              <div key={companyGroup.company} className="relative p-4 ui-context-card">
                 <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
                 <div className="absolute -inset-px opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none" style={{ boxShadow: `0 0 35px ${hexToRgba(color, 0.2)}` }} />
-                <div className="flex gap-4">
+
+                <div className="flex gap-4 mb-4">
                   <div className="w-16 h-16 rounded-xl border border-white/10 bg-black/40 overflow-hidden shrink-0">
-                    {imageUrl(experienceImage(exp, data), 160, 160) ? (
-                      <img src={imageUrl(experienceImage(exp, data), 160, 160)!} alt={exp.company || 'Company visual'} className="w-full h-full object-cover" />
+                    {imageUrl(experienceImage({ logo: companyGroup.logo }, data), 160, 160) ? (
+                      <img src={imageUrl(experienceImage({ logo: companyGroup.logo }, data), 160, 160)!} alt={companyGroup.company || 'Company visual'} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[8px] font-mono text-white/35">LOGO</div>
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-[9px] font-mono text-white/40 mb-1">{exp.period}</div>
-                    <h3 className="font-black text-white leading-tight text-sm uppercase tracking-wide">{exp.role}</h3>
-                    <div className="text-xs text-white/50 mb-2">{exp.company}</div>
-                    <p className="text-[11px] text-white/35 line-clamp-4 leading-relaxed">{exp.description}</p>
-                    {Array.isArray(exp.skills) && exp.skills.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {exp.skills.slice(0, 5).map((s: string) => (
-                          <span key={s} className="text-[9px] px-2 py-1 rounded border border-white/10 text-white/60 bg-black/30">{s}</span>
-                        ))}
+                    <h3 className="font-black text-white leading-tight text-base uppercase tracking-wide">{companyGroup.company}</h3>
+                  </div>
+                </div>
+
+                <div className="relative ml-1 pl-5">
+                  <div className="absolute left-[5px] top-0 bottom-0 w-[2px]" style={{ background: `linear-gradient(180deg, ${hexToRgba(color, 0.8)}, ${hexToRgba(color, 0.2)}, transparent)` }} />
+                  <div className="space-y-3">
+                    {companyGroup.roles.map((exp: any, idx: number) => (
+                      <div key={exp._id || `${companyGroup.company}-${idx}`} className="relative p-3 rounded-lg border border-white/10 bg-black/30">
+                        <div className="absolute -left-[17px] top-4 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 10px ${hexToRgba(color, 0.85)}` }} />
+                        <div className="text-[9px] font-mono text-white/40 mb-1">{exp.period}</div>
+                        <h4 className="font-black text-white leading-tight text-sm uppercase tracking-wide">{exp.role}</h4>
+                        <p className="text-[11px] text-white/35 line-clamp-4 leading-relaxed mt-1.5">{exp.description}</p>
+                        {Array.isArray(exp.skills) && exp.skills.length > 0 && (
+                          <div className="mt-2.5 flex flex-wrap gap-2">
+                            {exp.skills.slice(0, 5).map((s: string) => (
+                              <span key={s} className="text-[9px] px-2 py-1 rounded border border-white/10 text-white/60 bg-black/30">{s}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
                 </div>
               </div>
@@ -187,15 +324,27 @@ const Statue = ({
         )
 
       case 'about':
+        const site = data.siteSettings || {}
+        const aboutText = portableToPlain(site.aboutContent)
         return (
           <div className="space-y-6">
             <div className="aspect-video ui-context-card flex items-center justify-center relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="text-[9px] font-mono text-white/20 tracking-[0.5em] animate-pulse">ESTABLISHING_LINK...</div>
+              {site.aboutPhoto ? (
+                <img
+                  src={imageUrl(site.aboutPhoto, 800, 450)!}
+                  alt="About profile"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="text-[9px] font-mono text-white/20 tracking-[0.5em] animate-pulse">ESTABLISHING_LINK...</div>
+                </>
+              )}
             </div>
             <div className="p-6 ui-context-card shadow-inner">
-              <p className="text-white/60 text-xs leading-relaxed italic">
-                "Specializing in high-fidelity 3D interaction, engine-level optimization, and technical production. Crafting digital worlds where physics meets emotion."
+              <p className="text-white/60 text-xs leading-relaxed italic whitespace-pre-line">
+                {aboutText || 'Add About content in Site Settings -> About Me.'}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -236,18 +385,75 @@ const Statue = ({
         )
 
       case 'contact':
+        const links = Array.isArray(data?.siteSettings?.contactLinks) ? data.siteSettings.contactLinks : []
         return (
           <div className="space-y-4">
             <div className="p-5 ui-context-card">
               <div className="text-[9px] font-mono uppercase opacity-40 mb-2">Direct Channel</div>
-              <p className="text-sm text-white/70">
-                Use the mini statues in the world to jump to GitHub, LinkedIn, and Itch.io.
-              </p>
+              {links.length > 0 ? (
+                <div className="space-y-2">
+                  {links.slice(0, 6).map((l: any, idx: number) => (
+                    <a key={`${l?.url || 'contact'}-${idx}`} href={l?.url || '#'} target="_blank" rel="noreferrer" className="block text-sm text-white/70 underline-offset-4 hover:underline">
+                      {l?.label || l?.url}
+                    </a>
+                  ))}
+                </div>
+              ) : <p className="text-sm text-white/70">Add contact links from Site Settings dashboard.</p>}
             </div>
             <div className="p-5 ui-context-card">
               <div className="text-[9px] font-mono uppercase opacity-40 mb-2">Collaboration</div>
-              <p className="text-xs text-white/50">Open to gameplay systems, tools, and technical art projects.</p>
+              <p className="text-xs text-white/50">{data?.siteSettings?.contactIntro || 'Open to gameplay systems, tools, and technical art projects.'}</p>
             </div>
+            <form
+              onSubmit={submitContact}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              className="p-5 ui-context-card space-y-2.5"
+            >
+              <div className="text-[9px] font-mono uppercase opacity-40 mb-2">Send Message</div>
+              <input
+                value={contactForm.name}
+                onChange={(e) => setContactForm((prev) => ({ ...prev, name: e.target.value }))}
+                onPointerDown={(e) => e.stopPropagation()}
+                placeholder="Name"
+                className="w-full h-9 rounded-lg bg-slate-900/70 border border-white/15 px-2.5 text-[11px] text-white outline-none"
+                required
+              />
+              <input
+                value={contactForm.email}
+                type="email"
+                onChange={(e) => setContactForm((prev) => ({ ...prev, email: e.target.value }))}
+                onPointerDown={(e) => e.stopPropagation()}
+                placeholder="Email"
+                className="w-full h-9 rounded-lg bg-slate-900/70 border border-white/15 px-2.5 text-[11px] text-white outline-none"
+                required
+              />
+              <input
+                value={contactForm.subject}
+                onChange={(e) => setContactForm((prev) => ({ ...prev, subject: e.target.value }))}
+                onPointerDown={(e) => e.stopPropagation()}
+                placeholder="Subject"
+                className="w-full h-9 rounded-lg bg-slate-900/70 border border-white/15 px-2.5 text-[11px] text-white outline-none"
+                required
+              />
+              <textarea
+                value={contactForm.message}
+                onChange={(e) => setContactForm((prev) => ({ ...prev, message: e.target.value }))}
+                onPointerDown={(e) => e.stopPropagation()}
+                placeholder="Message"
+                className="w-full min-h-24 rounded-lg bg-slate-900/70 border border-white/15 px-2.5 py-2 text-[11px] text-white outline-none"
+                required
+              />
+              {contactStatus === 'success' && <div className="text-[10px] text-emerald-300">Message sent.</div>}
+              {contactStatus === 'error' && <div className="text-[10px] text-red-300">Send failed. Check recipient email in dashboard.</div>}
+              <button
+                type="submit"
+                disabled={contactSending}
+                className="text-[10px] px-3 py-2 rounded-lg border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors disabled:opacity-60"
+              >
+                {contactSending ? 'Sending...' : 'Send'}
+              </button>
+            </form>
           </div>
         )
 
@@ -295,18 +501,21 @@ const Statue = ({
             playAnimation={modelAnimated ?? false}
             clipName={animationClip}
             forceOpaque={!allowTransparency}
+            renderStyle={renderStyle}
           />
         </ModelErrorBoundary>
       </Suspense>
     )
-  }, [type, modelUrl, modelScale, modelRotation, modelPosition, modelAnimated, animationClip, allowTransparency])
+  }, [type, modelUrl, modelScale, modelRotation, modelPosition, modelAnimated, animationClip, allowTransparency, renderStyle])
 
   useFrame((state, delta) => {
     const player = state.scene.getObjectByName('player')
     if (player && groupRef.current) {
       groupRef.current.getWorldPosition(worldPosRef.current)
       const dist = worldPosRef.current.distanceTo(player.position)
-      const isNowNearby = dist < interactionDistance
+      // Hysteresis to avoid near/far flicker at the threshold.
+      const exitDistance = interactionDistance + 1.4
+      const isNowNearby = nearbyRef.current ? dist < exitDistance : dist < interactionDistance
       if (isNowNearby !== nearbyRef.current) {
         nearbyRef.current = isNowNearby
         setNearby(isNowNearby)
@@ -314,12 +523,36 @@ const Statue = ({
 
       const nearTarget = isNowNearby ? 1 : 0
       nearAmountRef.current = THREE.MathUtils.damp(nearAmountRef.current, nearTarget, 8, delta)
+
+      playerDirRef.current.subVectors(player.position, worldPosRef.current)
+      playerDirRef.current.y = 0
+      if (playerDirRef.current.lengthSq() > 0.0001) {
+        playerDirRef.current.normalize()
+      }
     }
 
+    const hoverTarget = hovered && nearbyRef.current ? 1 : 0
+    hoverAmountRef.current = THREE.MathUtils.damp(hoverAmountRef.current, hoverTarget, 11, delta)
+
     if (groupRef.current) {
-      const targetScale = 1 + nearAmountRef.current * 0.3
+      // Idle: 1.0, near: 1.255x, hover: extra subtle boost.
+      const targetScale = 1 + nearAmountRef.current * 0.255 + hoverAmountRef.current * 0.085
       targetScaleRef.current.set(targetScale, targetScale, targetScale)
-      groupRef.current.scale.lerp(targetScaleRef.current, 0.1)
+      const lerpAlpha = 1 - Math.exp(-10 * delta)
+      groupRef.current.scale.lerp(targetScaleRef.current, lerpAlpha)
+    }
+
+    if (ringRef.current) {
+      const pulse = 1 + Math.sin(state.clock.elapsedTime * (2.8 + nearAmountRef.current * 1.8)) * 0.03
+      const targetRingScale = 1.15 + nearAmountRef.current * 0.42 + hoverAmountRef.current * 0.16
+      ringRef.current.scale.set(targetRingScale * pulse, targetRingScale * pulse, 1)
+    }
+
+    if (ringMatRef.current) {
+      const nearGlow = nearAmountRef.current * 0.42
+      const hoverBoost = hoverAmountRef.current * 0.58
+      const targetOpacity = Math.min(1, nearGlow * 1.35 + hoverBoost * 1.35)
+      ringMatRef.current.opacity = THREE.MathUtils.damp(ringMatRef.current.opacity, targetOpacity, 10, delta)
     }
 
     if (coreRef.current) {
@@ -327,10 +560,18 @@ const Statue = ({
       const baseSpin = THREE.MathUtils.clamp(spinSpeed ?? 0.35, 0, 1.2)
       const baseFloatSpeed = THREE.MathUtils.clamp(floatSpeed ?? 1.8, 0.2, 2.6)
       const baseFloatAmount = THREE.MathUtils.clamp(floatAmount ?? 0.06, 0, 0.18)
-      const activeSpin = baseSpin * (0.45 + nearAmountRef.current * 0.55)
-      const activeFloatSpeed = baseFloatSpeed * (0.55 + nearAmountRef.current * 0.45)
-      const activeFloatAmount = baseFloatAmount * (0.45 + nearAmountRef.current * 0.55)
-      coreRef.current.rotation.y += activeSpin * delta
+      const idleSpin = baseSpin * (0.2 + (1 - nearAmountRef.current) * 0.7)
+      const activeFloatSpeed = baseFloatSpeed * (0.5 + nearAmountRef.current * 0.5 + hoverAmountRef.current * 0.25)
+      const activeFloatAmount = baseFloatAmount * (0.5 + nearAmountRef.current * 0.45 + hoverAmountRef.current * 0.2)
+
+      // Idle rotates slowly, near state turns toward player for better interaction feedback.
+      const targetYaw = Math.atan2(playerDirRef.current.x, playerDirRef.current.z)
+      const facingWeight = nearAmountRef.current
+      if (facingWeight > 0.05) {
+        coreRef.current.rotation.y = THREE.MathUtils.damp(coreRef.current.rotation.y, targetYaw, 9, delta)
+      } else {
+        coreRef.current.rotation.y += idleSpin * delta
+      }
       coreRef.current.position.y = Math.sin(state.clock.elapsedTime * activeFloatSpeed) * activeFloatAmount
     }
   })
@@ -343,9 +584,20 @@ const Statue = ({
         onPointerOut={() => setHovered(false)}
         onClick={onClick}
       >
-        {/* Primary symbolic form */}
+        {/* Primary symbolic form - no base (base only at link statues) */}
         <group ref={coreRef}>
           {renderStatueVisual}
+          <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.33, 0]}>
+            <ringGeometry args={[1.1, 1.58, 56]} />
+            <meshBasicMaterial
+              ref={ringMatRef}
+              color={color}
+              transparent
+              opacity={0}
+              toneMapped={false}
+              blending={THREE.AdditiveBlending}
+            />
+          </mesh>
         </group>
 
         {/* Identity Label */}
@@ -356,17 +608,18 @@ const Statue = ({
           style={{
             transition: 'all 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
             opacity: nearby && !isFocused ? 1 : 0,
-            transform: `scale(${nearby ? 1 : 0.85}) translateY(${nearby ? 0 : 20}px)`,
+            transform: `scale(${nearby ? (hovered ? 1.2 : 1.06) : 0.82}) translateY(${nearby ? (hovered ? -8 : -2) : 20}px)`,
+            filter: hovered ? 'drop-shadow(0 0 16px rgba(125,211,252,0.6))' : 'none',
             pointerEvents: 'none'
           }}
         >
           <div className="relative group">
             <div
-              className="px-6 py-2 bg-black/95 backdrop-blur-3xl border-l-[3px] shadow-[0_0_40px_rgba(0,0,0,0.6)] flex flex-col items-center"
+              className="px-7 py-2.5 bg-black/92 backdrop-blur-3xl border-l-[3px] rounded-xl shadow-[0_0_44px_rgba(0,0,0,0.6)] flex flex-col items-center"
               style={{ borderColor: color }}
             >
-              <div className="text-[8px] font-mono tracking-[0.6em] opacity-30 mb-0.5" style={{ color }}>SECTOR_ID</div>
-              <div className="text-2xl font-black text-white tracking-[0.15em] uppercase tabular-nums">{name}</div>
+              <div className="text-[8px] font-mono tracking-[0.5em] opacity-40 mb-0.5" style={{ color }}>SECTOR</div>
+              <div className="text-[30px] font-black text-white tracking-[0.12em] uppercase tabular-nums leading-none">{name}</div>
             </div>
           </div>
         </Html>
@@ -377,7 +630,6 @@ const Statue = ({
         position={[5, 6, -2]}
         distanceFactor={12}
         center
-        className="pointer-events-none"
         style={{
           transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
           opacity: isFocused ? 1 : 0,
@@ -390,6 +642,8 @@ const Statue = ({
       >
         <div
           className="w-[min(92vw,560px)] h-[min(82vh,700px)] ui-context-shell rounded-[34px] flex flex-col overflow-hidden relative"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
           style={{
             borderColor: `${color}66`,
             boxShadow: `0 0 30px ${hexToRgba(color, 0.22)}, 0 0 85px rgba(0,0,0,0.85)`,
@@ -435,17 +689,6 @@ const Statue = ({
         </div>
       </Html>
 
-      {/* Interaction Prompt Overlay */}
-      {hovered && nearby && !isFocused && (
-        <Html position={[0, 1.6, 0]} center distanceFactor={10}>
-          <div
-            className="px-6 py-2.5 rounded-full text-[9px] font-black uppercase tracking-[0.4em] border-2 bg-white text-black animate-pulse shadow-[0_0_40px_rgba(255,255,255,0.3)] transition-all scale-110"
-            style={{ borderColor: color }}
-          >
-            INIT_LINK
-          </div>
-        </Html>
-      )}
     </group>
   )
 }

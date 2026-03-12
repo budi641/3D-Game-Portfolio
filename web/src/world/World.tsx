@@ -160,22 +160,8 @@ function StylizedSky() {
   }, [])
 
   useEffect(() => {
-    const SKY_IMAGE_URL =
-      '/@fs/C:/Users/aamee/.cursor/projects/c-Users-aamee-OneDrive-Documents-3D-Game-Portfolio/assets/c__Users_aamee_AppData_Roaming_Cursor_User_workspaceStorage_6273074736cfaac4b45c7e3f63540a38_images_image-935e7e70-123c-4261-9f18-a7f37261f8a9.png'
-
-    const loader = new THREE.TextureLoader()
-    loader.load(
-      SKY_IMAGE_URL,
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace
-        tex.needsUpdate = true
-        setSkyTexture(tex)
-      },
-      undefined,
-      () => {
-        setSkyTexture(createFallbackSkyTexture())
-      }
-    )
+    // Always use local generated sky texture to avoid external path/permission issues.
+    setSkyTexture(createFallbackSkyTexture())
   }, [createFallbackSkyTexture])
 
   useEffect(() => {
@@ -208,6 +194,7 @@ function LinkRelic({
   floatAmount = 0.2,
   floatSpeed = 2,
   glowIntensity = 2.2,
+  renderStyle = 'pbr',
 }: {
   label: string
   url: string
@@ -222,6 +209,7 @@ function LinkRelic({
   floatAmount?: number
   floatSpeed?: number
   glowIntensity?: number
+  renderStyle?: 'pbr' | 'cel'
 }) {
   const relicRef = useRef<THREE.Group>(null)
   const modelGroupRef = useRef<THREE.Group>(null)
@@ -234,15 +222,19 @@ function LinkRelic({
   const nearAmountRef = useRef(0)
   const hoverAmountRef = useRef(0)
   const relicWorldPos = useMemo(() => new THREE.Vector3(), [])
+  const toPlayerRef = useMemo(() => new THREE.Vector3(), [])
+  const targetScaleRef = useMemo(() => new THREE.Vector3(1, 1, 1), [])
   const interactionDistance = 14
   const transitionDistance = 20
 
   useFrame((state, delta) => {
     if (relicRef.current) {
       relicRef.current.getWorldPosition(relicWorldPos)
-      // Use camera distance for consistent proximity detection in third-person mode.
-      const dist = relicWorldPos.distanceTo(state.camera.position)
-      const isNowNearby = dist <= interactionDistance
+      const playerObj = state.scene.getObjectByName('player')
+      const anchor = playerObj?.position || state.camera.position
+      const dist = relicWorldPos.distanceTo(anchor)
+      const exitDistance = interactionDistance + 1.2
+      const isNowNearby = nearbyRef.current ? dist <= exitDistance : dist <= interactionDistance
       if (isNowNearby !== nearbyRef.current) {
         nearbyRef.current = isNowNearby
         setNearby(isNowNearby)
@@ -255,6 +247,12 @@ function LinkRelic({
         1
       )
       nearAmountRef.current = THREE.MathUtils.damp(nearAmountRef.current, rawNear, 8, delta)
+
+      toPlayerRef.subVectors(anchor, relicWorldPos)
+      toPlayerRef.y = 0
+      if (toPlayerRef.lengthSq() > 0.0001) {
+        toPlayerRef.normalize()
+      }
     }
 
     const hoverTarget = hovered ? 1 : 0
@@ -264,23 +262,34 @@ function LinkRelic({
 
     if (modelGroupRef.current) {
       // State 1 (idle): slight hover/rotation. State 2 (near): faster/livelier movement.
-      const spin = spinSpeed * (0.14 + nearFactor * 0.9)
+      const spin = spinSpeed * (0.14 + (1 - nearFactor) * 0.55)
       const bobAmount = floatAmount * (0.14 + nearFactor * 0.9)
       const bobSpeed = floatSpeed * (0.42 + nearFactor * 0.95)
-      modelGroupRef.current.rotation.y += spin * delta
+
+      const targetYaw = Math.atan2(toPlayerRef.x, toPlayerRef.z)
+      if (nearFactor > 0.05) {
+        modelGroupRef.current.rotation.y = THREE.MathUtils.damp(modelGroupRef.current.rotation.y, targetYaw, 9, delta)
+      } else {
+        modelGroupRef.current.rotation.y += spin * delta
+      }
       modelGroupRef.current.position.y = modelPosition[1] + Math.sin(state.clock.elapsedTime * bobSpeed) * bobAmount
+
+      const targetScale = 1 + nearFactor * 0.255 + hoverAmountRef.current * 0.085
+      targetScaleRef.set(targetScale, targetScale, targetScale)
+      const alpha = 1 - Math.exp(-10 * delta)
+      modelGroupRef.current.scale.lerp(targetScaleRef, alpha)
     }
 
     if (baseMatRef.current) {
       // State 3 (hover): glow ring and base only on hover.
-      const targetGlow = hoverAmountRef.current * glowIntensity * (0.85 + nearFactor * 0.35)
+      const targetGlow = (nearFactor * 0.55 + hoverAmountRef.current) * glowIntensity * (1 + nearFactor * 0.35)
       baseMatRef.current.emissiveIntensity = THREE.MathUtils.lerp(baseMatRef.current.emissiveIntensity, targetGlow, 0.12)
     }
 
     if (ringMatRef.current) {
       const pulse = 0.18 + Math.sin(state.clock.elapsedTime * 4.0) * 0.16
       const targetOpacity = THREE.MathUtils.clamp(
-        hoverAmountRef.current * (0.22 + nearFactor * 0.45 + pulse) * (glowIntensity / 2.2),
+        (nearFactor * 0.4 + hoverAmountRef.current * (0.48 + nearFactor * 0.42 + pulse)) * (glowIntensity / 2),
         0,
         1
       )
@@ -290,7 +299,7 @@ function LinkRelic({
     if (ringMeshRef.current) {
       // Idle ring is small; expands in proximity; tiny pulse while active.
       const pulseScale = 1 + Math.sin(state.clock.elapsedTime * 3.2) * (0.02 + nearFactor * 0.02)
-      const targetScale = 0.68 + nearFactor * 0.4 + pulseScale * 0.04
+      const targetScale = 0.92 + nearFactor * 0.55 + pulseScale * 0.05
       ringMeshRef.current.scale.set(targetScale, targetScale, 1)
     }
   })
@@ -318,12 +327,13 @@ function LinkRelic({
           <meshStandardMaterial transparent opacity={0} />
         </mesh>
         <mesh ref={ringMeshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.38, 0]}>
-          <ringGeometry args={[0.6, 0.95, 36]} />
+          <ringGeometry args={[0.9, 1.35, 44]} />
           <meshBasicMaterial
             ref={ringMatRef}
             color={color}
             transparent
             opacity={0.35}
+            toneMapped={false}
             blending={THREE.AdditiveBlending}
           />
         </mesh>
@@ -337,6 +347,7 @@ function LinkRelic({
                   rotation={modelRotation}
                   scale={modelScale}
                   playAnimation={modelAnimated}
+                  renderStyle={renderStyle}
                 />
               </group>
             </ModelErrorBoundary>
@@ -364,8 +375,10 @@ function LinkRelic({
 
 function ScenePlacedModel({
   item,
+  renderStyle = 'pbr',
 }: {
   item: ScenePlacedModelConfig
+  renderStyle?: 'pbr' | 'cel'
 }) {
   const groupRef = useRef<THREE.Group>(null)
   const ringMatRef = useRef<THREE.MeshBasicMaterial>(null)
@@ -425,6 +438,7 @@ function ScenePlacedModel({
               doubleSided={typeof item.doubleSidedMaterials === 'boolean' ? item.doubleSidedMaterials : true}
               clipName={typeof item.animationClip === 'string' ? item.animationClip : undefined}
               forceOpaque={!(typeof item.allowTransparency === 'boolean' ? item.allowTransparency : false)}
+              renderStyle={renderStyle}
             />
           </group>
         </ModelErrorBoundary>
@@ -435,7 +449,15 @@ function ScenePlacedModel({
 
 const World = () => {
   const setFocusedSection = useAppStore((state) => state.setFocusedSection)
-  const { data } = usePortfolioData()
+  const addExploredStatue = useAppStore((state) => state.addExploredStatue)
+  const exploredStatueNames = useAppStore((state) => state.exploredStatueNames)
+  const setTotalStatueCount = useAppStore((state) => state.setTotalStatueCount)
+  const setPendingAchievement = useAppStore((state) => state.setPendingAchievement)
+  const { data, loading } = usePortfolioData()
+  const storedQuality = useAppStore((state) => state.quality)
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+  const quality = isMobile ? 'low' : storedQuality
+  const renderStyle = (data?.scene?.renderStyle === 'pbr' ? 'pbr' : 'cel') as 'pbr' | 'cel'
   const sectionRadius = typeof data?.scene?.sectionRadius === 'number' ? data.scene.sectionRadius : 52
 
   const sections = useMemo(() => {
@@ -520,20 +542,41 @@ const World = () => {
     })
   }, [data?.scene?.linkRelics, sectionRadius])
 
+  useEffect(() => {
+    setTotalStatueCount(sections.length)
+  }, [sections.length, setTotalStatueCount])
+
+  const handleStatueClick = (name: string) => {
+    setFocusedSection(name)
+    const wasNew = !exploredStatueNames.includes(name)
+    addExploredStatue(name)
+    if (wasNew) {
+      const newCount = exploredStatueNames.length + 1
+      const total = sections.length
+      if (newCount >= total) {
+        setPendingAchievement({ message: 'Master Explorer', subtext: 'All statues discovered!', isBig: true })
+      } else {
+        setPendingAchievement({ message: `Discovered: ${name}`, subtext: `${newCount}/${total} statues`, isBig: false })
+      }
+    }
+  }
+
   const linkPathCenterZ = sectionRadius - 16
   const linkPathLength = sectionRadius + 32
   const linkPedestalZ = sectionRadius + 24
   const sceneModels = Array.isArray(data?.scene?.sceneModels) ? data.scene.sceneModels : []
 
+  if (loading && !data) return null
+
   return (
     <>
-      <ambientLight intensity={0.5} />
-      <pointLight position={[0, 20, 0]} intensity={1.5} color="#3b82f6" />
+      <ambientLight intensity={quality === 'low' ? 0.7 : 0.5} />
+      <pointLight position={[0, 20, 0]} intensity={quality === 'low' ? 2 : 1.5} color="#3b82f6" />
       <directionalLight 
         position={[25, 50, 25]} 
-        intensity={1} 
+        intensity={quality === 'low' ? 1 : 1}
         castShadow 
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize={quality === 'high' ? [768, 768] : [512, 512]}
       />
       
       <StylizedSky />
@@ -551,11 +594,11 @@ const World = () => {
 
       <Grid
         infiniteGrid
-        fadeDistance={200}
+        fadeDistance={quality === 'low' ? 130 : 200}
         fadeStrength={10}
         cellSize={1}
         sectionSize={10}
-        sectionThickness={1.5}
+        sectionThickness={quality === 'low' ? 1 : 1.5}
         sectionColor="#1e293b"
         cellColor="#0f172a"
         position={[0, 0.01, 0]}
@@ -577,7 +620,6 @@ const World = () => {
                 <boxGeometry args={[4.5, 0.05, length]} />
                 <meshStandardMaterial color="#0d1117" roughness={0.9} />
               </mesh>
-              <CuboidCollider args={[2.25, 0.025, length/2]} />
               
               {/* Colored Line - Elevated above road */}
               <mesh position={[0, 0.026, 0]}>
@@ -593,7 +635,6 @@ const World = () => {
                     <boxGeometry args={[10, 0.1, 10]} />
                     <meshStandardMaterial color="#0d1117" roughness={1} />
                  </mesh>
-                 <CuboidCollider args={[5, 0.05, 5]} />
                  
                  {/* Glowing Ring */}
                  <mesh position={[0, 0.051, 0]} rotation={[-Math.PI/2, 0, 0]}>
@@ -611,6 +652,7 @@ const World = () => {
                <Statue 
                 name={section.name} 
                 position={[0, 2.0, 0]} 
+                renderStyle={renderStyle}
                 type={section.archetype}
                 color={section.color}
                 data={data}
@@ -625,7 +667,7 @@ const World = () => {
                 floatAmount={section.statueFloatAmount}
                 floatSpeed={section.statueFloatSpeed}
                 interactionDistance={section.statueInteractionDistance}
-                onClick={() => setFocusedSection(section.name)}
+                onClick={() => handleStatueClick(section.name)}
               />
             </group>
           </group>
@@ -638,7 +680,6 @@ const World = () => {
           <boxGeometry args={[4.5, 0.05, linkPathLength]} />
           <meshStandardMaterial color="#0d1117" roughness={0.9} />
         </mesh>
-        <CuboidCollider args={[2.25, 0.025, linkPathLength / 2]} />
         <mesh position={[0, 0.026, 0]}>
           <boxGeometry args={[0.1, 0.001, linkPathLength]} />
           <meshStandardMaterial color="#60a5fa" emissive="#60a5fa" emissiveIntensity={4} />
@@ -649,7 +690,6 @@ const World = () => {
           <boxGeometry args={[28, 0.1, 14]} />
           <meshStandardMaterial color="#0d1117" roughness={1} />
         </mesh>
-        <CuboidCollider args={[14, 0.05, 7]} />
       </RigidBody>
 
       {/* Tiny interactive link relics */}
@@ -660,6 +700,7 @@ const World = () => {
           color={item.color}
           url={item.url}
           position={item.position}
+          renderStyle={renderStyle}
           modelUrl={item.modelUrl}
           modelScale={item.modelScale}
           modelPosition={item.modelPosition}
@@ -673,7 +714,7 @@ const World = () => {
       ))}
 
       {sceneModels.map((item: ScenePlacedModelConfig, idx: number) => (
-        <ScenePlacedModel key={`${item.name || 'scene-model'}-${idx}`} item={item} />
+        <ScenePlacedModel key={`${item.name || 'scene-model'}-${idx}`} item={item} renderStyle={renderStyle} />
       ))}
 
       {/* Intentionally uncluttered level: only paths, section statues, and link statues */}

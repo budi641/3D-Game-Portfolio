@@ -5,9 +5,27 @@ import ViewportChrome from './components/ui/ViewportChrome'
 import OnboardingModal from './components/ui/OnboardingModal'
 import LoadingScreen from './components/ui/LoadingScreen'
 import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect } from 'react'
+import { usePortfolioData } from './hooks/usePortfolioData'
 
 function App() {
   const mode = useAppStore((state) => state.mode)
+  const { data } = usePortfolioData()
+
+  useEffect(() => {
+    const title = data?.siteSettings?.title || '3D Game Portfolio'
+    const description =
+      data?.siteSettings?.description || 'Interactive game-style portfolio with playable media, projects, and contact.'
+
+    document.title = title
+    let meta = document.querySelector('meta[name="description"]')
+    if (!meta) {
+      meta = document.createElement('meta')
+      meta.setAttribute('name', 'description')
+      document.head.appendChild(meta)
+    }
+    meta.setAttribute('content', description)
+  }, [data?.siteSettings?.title, data?.siteSettings?.description])
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-engine-bg font-engine text-engine-text">

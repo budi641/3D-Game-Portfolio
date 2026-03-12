@@ -18,14 +18,14 @@ const ViewportChrome = () => {
     <motion.div 
       initial={{ y: -50, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      className="absolute top-4 left-4 right-4 h-14 bg-slate-800/80 backdrop-blur-xl border border-sky-200/20 rounded-2xl flex items-center justify-between px-6 z-50 select-none shadow-[0_20px_50px_rgba(0,0,0,0.35)]"
+      className="absolute top-2 sm:top-4 left-2 sm:left-4 right-2 sm:right-4 min-h-12 sm:h-14 bg-slate-800/80 backdrop-blur-xl border border-sky-200/20 rounded-xl sm:rounded-2xl flex items-center justify-between px-2 sm:px-6 z-50 select-none shadow-[0_20px_50px_rgba(0,0,0,0.35)] gap-2 overflow-x-auto"
     >
       {/* Dynamic Background Glow */}
       <div className="absolute inset-0 bg-gradient-to-r from-sky-400/10 via-transparent to-blue-300/10 rounded-2xl pointer-events-none" />
 
       {/* Left: Viewport Controls */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3 group">
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+        <div className="hidden sm:flex items-center gap-3 group">
           <motion.div 
             animate={{ scale: [1, 1.12, 1] }}
             transition={{ duration: 2.8, repeat: Infinity }}
@@ -37,23 +37,23 @@ const ViewportChrome = () => {
           </div>
         </div>
         
-        <div className="h-8 w-[1px] bg-white/10 mx-2"></div>
+        <div className="hidden sm:block h-8 w-[1px] bg-white/10 mx-2"></div>
         
         <div className="flex items-center gap-2">
           <button 
             onClick={() => setMode('normal')}
-            className="flex items-center gap-2 px-4 h-9 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 rounded-xl transition-all hover:scale-105 active:scale-95 text-xs font-bold"
+            className="flex items-center gap-1.5 px-2 sm:px-4 h-8 sm:h-9 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 rounded-lg sm:rounded-xl transition-all hover:scale-105 active:scale-95 text-[10px] sm:text-xs font-bold"
           >
             <Square size={14} className="fill-current" />
-            <span>TERMINATE</span>
+            <span className="hidden sm:inline">TERMINATE</span>
           </button>
 
           <button 
             onClick={() => triggerRespawn()}
-            className="flex items-center gap-2 px-4 h-9 bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white rounded-xl transition-all hover:scale-105 active:scale-95 text-xs font-bold"
+            className="flex items-center gap-1.5 px-2 sm:px-4 h-8 sm:h-9 bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white rounded-lg sm:rounded-xl transition-all hover:scale-105 active:scale-95 text-[10px] sm:text-xs font-bold"
           >
             <Ghost size={14} />
-            <span>REBOOT_ENTITY</span>
+            <span className="hidden sm:inline">REBOOT_ENTITY</span>
           </button>
         </div>
       </div>
@@ -71,13 +71,13 @@ const ViewportChrome = () => {
       </div>
 
       {/* Right: Settings & Quality */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
         <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
-          {(['low', 'medium', 'high'] as const).map((q) => (
+          {(['low', 'high'] as const).map((q) => (
             <button
               key={q}
               onClick={() => setQuality(q)}
-              className={`px-3 py-1 text-[10px] uppercase font-black transition-all rounded-lg ${
+              className={`px-2 sm:px-3 py-1 text-[9px] sm:text-[10px] uppercase font-black transition-all rounded-lg ${
                 quality === q 
                   ? 'bg-sky-500 text-slate-950 shadow-[0_5px_15px_rgba(56,189,248,0.4)]' 
                   : 'text-white/40 hover:text-white hover:bg-white/5'

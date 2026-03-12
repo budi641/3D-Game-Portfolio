@@ -8,6 +8,26 @@ export default {
   fields: [
     { name: 'title', type: 'string', title: 'Scene Name' },
     {
+      name: 'showStatueIndicators',
+      type: 'boolean',
+      title: 'Show Statue Indicators in Play Mode',
+      initialValue: false,
+      description: 'When enabled, shows directional indicators for section statues in the 3D Play Mode.',
+    },
+    {
+      name: 'renderStyle',
+      type: 'string',
+      title: '3D Render Style',
+      initialValue: 'cel',
+      options: {
+        list: [
+          { title: 'Cel-Shaded (Toon)', value: 'cel' },
+          { title: 'PBR (Physically Based)', value: 'pbr' },
+        ],
+      },
+      description: 'Cel-shaded gives a stylized toon look; PBR gives realistic materials.',
+    },
+    { 
       name: 'environmentMap', 
       type: 'string', 
       title: 'Atmospheric Preset',
