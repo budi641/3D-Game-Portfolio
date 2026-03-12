@@ -108,6 +108,7 @@ const CdnAnimatedModel = ({
       const mesh = obj as THREE.Mesh
       if (!mesh.isMesh) return
 
+      mesh.frustumCulled = true
       mesh.castShadow = true
       mesh.receiveShadow = true
       if (!mesh.geometry.attributes.normal) {

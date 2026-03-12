@@ -7,10 +7,16 @@ import LoadingScreen from './components/ui/LoadingScreen'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect } from 'react'
 import { usePortfolioData } from './hooks/usePortfolioData'
+import { preloadGameModels } from './lib/preloadModels'
 
 function App() {
   const mode = useAppStore((state) => state.mode)
   const { data } = usePortfolioData()
+
+  useEffect(() => {
+    const t = setTimeout(preloadGameModels, 100)
+    return () => clearTimeout(t)
+  }, [])
 
   useEffect(() => {
     const title = data?.siteSettings?.title || '3D Game Portfolio'

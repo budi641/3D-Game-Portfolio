@@ -26,19 +26,32 @@ const LoadingScreen = () => {
 
     const isGameMode = mode === 'game'
     const elapsed = performance.now() - bootStartedAt
-    const minVisibleMs = 1200
-    const maxWaitMs = 8000
+    const hasLoadedBefore = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('game-scene-loaded') === '1'
     const sceneReady = safeProgress >= 99 || !active
-    const forcedReady = elapsed >= maxWaitMs
-    const canComplete = isGameMode ? (sceneReady || forcedReady) : true
-    if (!canComplete) return
+    const forcedReady = elapsed >= 8000
 
+    if (isGameMode) {
+      if (hasLoadedBefore && sceneReady) {
+        sessionStorage.setItem('game-scene-loaded', '1')
+        const timer = window.setTimeout(() => {
+          setIsLoaded(true)
+          setShouldShow(false)
+        }, 80)
+        return () => window.clearTimeout(timer)
+      }
+      if (!sceneReady && !forcedReady) return
+    } else {
+      if (!sceneReady && !forcedReady) return
+    }
+
+    const minVisibleMs = hasLoadedBefore ? 180 : 500
     const waitMs = Math.max(0, minVisibleMs - elapsed)
+    if (isGameMode && typeof sessionStorage !== 'undefined') sessionStorage.setItem('game-scene-loaded', '1')
 
     const timer = window.setTimeout(() => {
       setIsLoaded(true)
       setShouldShow(false)
-    }, waitMs + 350)
+    }, waitMs + 200)
 
     return () => window.clearTimeout(timer)
   }, [safeProgress, active, mode, isLoaded, setIsLoaded, bootStartedAt])

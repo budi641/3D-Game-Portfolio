@@ -1,6 +1,7 @@
 import { Grid, Environment, Float, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import type { PerformanceTier } from '../hooks/usePerformanceTier'
 import { useFrame } from '@react-three/fiber'
 import { useAppStore } from '../store/appStore'
 import { usePortfolioData } from '../hooks/usePortfolioData'
@@ -99,13 +100,14 @@ function mapLegacyTypeToArchetype(value: string | undefined): DefaultSection['ar
   return null
 }
 
-function StylizedSky() {
+function StylizedSky({ performanceTier }: { performanceTier: PerformanceTier }) {
   const [skyTexture, setSkyTexture] = useState<THREE.Texture | null>(null)
 
   const createFallbackSkyTexture = useMemo(() => () => {
+    const low = performanceTier === 'low'
     const canvas = document.createElement('canvas')
-    canvas.width = 2048
-    canvas.height = 1024
+    canvas.width = low ? 1024 : 2048
+    canvas.height = low ? 512 : 1024
     const ctx = canvas.getContext('2d')
     if (!ctx) return null
 
@@ -157,12 +159,11 @@ function StylizedSky() {
     tex.colorSpace = THREE.SRGBColorSpace
     tex.needsUpdate = true
     return tex
-  }, [])
+  }, [performanceTier])
 
   useEffect(() => {
-    // Always use local generated sky texture to avoid external path/permission issues.
     setSkyTexture(createFallbackSkyTexture())
-  }, [createFallbackSkyTexture])
+  }, [createFallbackSkyTexture, performanceTier])
 
   useEffect(() => {
     return () => {
@@ -172,9 +173,10 @@ function StylizedSky() {
 
   if (!skyTexture) return null
 
+  const segments = performanceTier === 'low' ? 16 : 64
   return (
     <mesh frustumCulled={false} renderOrder={-1000}>
-      <sphereGeometry args={[520, 64, 64]} />
+      <sphereGeometry args={[520, segments, segments]} />
       <meshBasicMaterial map={skyTexture} side={THREE.BackSide} depthWrite={false} toneMapped={false} fog={false} />
     </mesh>
   )
@@ -195,6 +197,7 @@ function LinkRelic({
   floatSpeed = 2,
   glowIntensity = 2.2,
   renderStyle = 'pbr',
+  performanceTier = 'high',
 }: {
   label: string
   url: string
@@ -210,8 +213,10 @@ function LinkRelic({
   floatSpeed?: number
   glowIntensity?: number
   renderStyle?: 'pbr' | 'cel'
+  performanceTier?: PerformanceTier
 }) {
   const relicRef = useRef<THREE.Group>(null)
+  const frameSkip = useRef(0)
   const modelGroupRef = useRef<THREE.Group>(null)
   const baseMatRef = useRef<THREE.MeshStandardMaterial>(null)
   const ringMatRef = useRef<THREE.MeshBasicMaterial>(null)
@@ -228,6 +233,10 @@ function LinkRelic({
   const transitionDistance = 20
 
   useFrame((state, delta) => {
+    if (performanceTier === 'low') {
+      frameSkip.current++
+      if (frameSkip.current % 3 !== 0) return
+    }
     if (relicRef.current) {
       relicRef.current.getWorldPosition(relicWorldPos)
       const playerObj = state.scene.getObjectByName('player')
@@ -327,7 +336,7 @@ function LinkRelic({
           <meshStandardMaterial transparent opacity={0} />
         </mesh>
         <mesh ref={ringMeshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.38, 0]}>
-          <ringGeometry args={[0.9, 1.35, 44]} />
+          <ringGeometry args={[0.9, 1.35, performanceTier === 'low' ? 24 : 44]} />
           <meshBasicMaterial
             ref={ringMatRef}
             color={color}
@@ -346,7 +355,7 @@ function LinkRelic({
                   position={modelPosition}
                   rotation={modelRotation}
                   scale={modelScale}
-                  playAnimation={modelAnimated}
+                  playAnimation={modelAnimated && nearby}
                   renderStyle={renderStyle}
                 />
               </group>
@@ -376,14 +385,17 @@ function LinkRelic({
 function ScenePlacedModel({
   item,
   renderStyle = 'pbr',
+  performanceTier = 'high',
 }: {
   item: ScenePlacedModelConfig
   renderStyle?: 'pbr' | 'cel'
+  performanceTier?: PerformanceTier
 }) {
   const groupRef = useRef<THREE.Group>(null)
   const ringMatRef = useRef<THREE.MeshBasicMaterial>(null)
   const ringMeshRef = useRef<THREE.Mesh>(null)
   const pulseOffset = useMemo(() => Math.random() * Math.PI * 2, [])
+  const frameSkip = useRef(0)
 
   const position = Array.isArray(item.position) && item.position.length === 3 ? item.position : [0, 0, 0]
   const rotation = Array.isArray(item.rotation) && item.rotation.length === 3 ? item.rotation : [0, 0, 0]
@@ -395,6 +407,10 @@ function ScenePlacedModel({
   const rotateZ = typeof item.autoRotateSpeedZ === 'number' ? item.autoRotateSpeedZ : 0
 
   useFrame((state, delta) => {
+    if (performanceTier === 'low') {
+      frameSkip.current++
+      if (frameSkip.current % 3 !== 0) return
+    }
     if (groupRef.current && item.autoRotate) {
       groupRef.current.rotation.x += rotateX * delta
       groupRef.current.rotation.y += rotateY * delta
@@ -447,16 +463,13 @@ function ScenePlacedModel({
   )
 }
 
-const World = () => {
+const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier }) => {
   const setFocusedSection = useAppStore((state) => state.setFocusedSection)
   const addExploredStatue = useAppStore((state) => state.addExploredStatue)
   const exploredStatueNames = useAppStore((state) => state.exploredStatueNames)
   const setTotalStatueCount = useAppStore((state) => state.setTotalStatueCount)
   const setPendingAchievement = useAppStore((state) => state.setPendingAchievement)
   const { data, loading } = usePortfolioData()
-  const storedQuality = useAppStore((state) => state.quality)
-  const isMobile = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
-  const quality = isMobile ? 'low' : storedQuality
   const renderStyle = (data?.scene?.renderStyle === 'pbr' ? 'pbr' : 'cel') as 'pbr' | 'cel'
   const sectionRadius = typeof data?.scene?.sectionRadius === 'number' ? data.scene.sectionRadius : 52
 
@@ -570,39 +583,40 @@ const World = () => {
 
   return (
     <>
-      <ambientLight intensity={quality === 'low' ? 0.7 : 0.5} />
-      <pointLight position={[0, 20, 0]} intensity={quality === 'low' ? 2 : 1.5} color="#3b82f6" />
+      <ambientLight intensity={0.7} />
+      <pointLight position={[0, 20, 0]} intensity={2} color="#3b82f6" />
       <directionalLight 
         position={[25, 50, 25]} 
-        intensity={quality === 'low' ? 1 : 1}
-        castShadow 
-        shadow-mapSize={quality === 'high' ? [768, 768] : [512, 512]}
+        intensity={1}
+        castShadow={performanceTier === 'high'}
+        shadow-mapSize={performanceTier === 'low' ? [256, 256] : [512, 512]}
       />
       
-      <StylizedSky />
-      {/* Keep cubemap for lighting/reflections only, not scene background. */}
+      <StylizedSky performanceTier={performanceTier} />
       <Environment preset={(data?.scene?.environmentMap || 'night') as any} background={false} />
       
       {/* Dark Base Ground - Lowered to prevent Z-fighting */}
       <RigidBody type="fixed" colliders={false} position={[0, -0.1, 0]}>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <circleGeometry args={[150, 64]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow={performanceTier === 'high'}>
+          <circleGeometry args={[150, performanceTier === 'low' ? 32 : 64]} />
           <meshStandardMaterial color="#05070a" roughness={1} />
         </mesh>
         <CuboidCollider args={[150, 0.05, 150]} position={[0, -0.05, 0]} />
       </RigidBody>
 
-      <Grid
-        infiniteGrid
-        fadeDistance={quality === 'low' ? 130 : 200}
-        fadeStrength={10}
-        cellSize={1}
-        sectionSize={10}
-        sectionThickness={quality === 'low' ? 1 : 1.5}
-        sectionColor="#1e293b"
-        cellColor="#0f172a"
-        position={[0, 0.01, 0]}
-      />
+      {performanceTier === 'high' && (
+        <Grid
+          infiniteGrid
+          fadeDistance={130}
+          fadeStrength={10}
+          cellSize={1}
+          sectionSize={10}
+          sectionThickness={1}
+          sectionColor="#1e293b"
+          cellColor="#0f172a"
+          position={[0, 0.01, 0]}
+        />
+      )}
 
       {/* Roads and Sectors */}
       {sections.map((section: any) => {
@@ -638,7 +652,7 @@ const World = () => {
                  
                  {/* Glowing Ring */}
                  <mesh position={[0, 0.051, 0]} rotation={[-Math.PI/2, 0, 0]}>
-                    <ringGeometry args={[4.3, 4.6, 64]} />
+                    <ringGeometry args={[4.3, 4.6, performanceTier === 'low' ? 32 : 64]} />
                     <meshStandardMaterial
                       color={section.color}
                       emissive={section.color}
@@ -667,6 +681,7 @@ const World = () => {
                 floatAmount={section.statueFloatAmount}
                 floatSpeed={section.statueFloatSpeed}
                 interactionDistance={section.statueInteractionDistance}
+                performanceTier={performanceTier}
                 onClick={() => handleStatueClick(section.name)}
               />
             </group>
@@ -710,11 +725,12 @@ const World = () => {
           floatAmount={item.floatAmount}
           floatSpeed={item.floatSpeed}
           glowIntensity={item.glowIntensity}
+          performanceTier={performanceTier}
         />
       ))}
 
       {sceneModels.map((item: ScenePlacedModelConfig, idx: number) => (
-        <ScenePlacedModel key={`${item.name || 'scene-model'}-${idx}`} item={item} renderStyle={renderStyle} />
+        <ScenePlacedModel key={`${item.name || 'scene-model'}-${idx}`} item={item} renderStyle={renderStyle} performanceTier={performanceTier} />
       ))}
 
       {/* Intentionally uncluttered level: only paths, section statues, and link statues */}

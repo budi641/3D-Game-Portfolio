@@ -6,9 +6,9 @@ import { useAppStore } from '../../store/appStore'
 import { Physics } from '@react-three/rapier'
 import Player from '../../world/Player'
 import { StatueIndicatorUpdater } from '../../world/StatueIndicatorUpdater'
-import { EffectComposer, Bloom, ToneMapping } from '@react-three/postprocessing'
-import { ToneMappingMode } from 'postprocessing'
+import { AdaptivePerformanceMonitor } from '../../world/AdaptivePerformanceMonitor'
 import { usePortfolioData } from '../../hooks/usePortfolioData'
+import { usePerformanceTier } from '../../hooks/usePerformanceTier'
 import QuestModal from '../ui/QuestModal'
 import AchievementToast from '../ui/AchievementToast'
 
@@ -22,12 +22,11 @@ const keyboardMap = [
 ]
 
 const GameMode = () => {
-  const storedQuality = useAppStore((state) => state.quality)
   const focusedSection = useAppStore((state) => state.focusedSection)
   const statueIndicators = useAppStore((state) => state.statueIndicators)
   const { data } = usePortfolioData()
+  const perfTier = usePerformanceTier()
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
-  const quality = isMobile ? 'low' : storedQuality
   const showStatueIndicators = data?.scene?.showStatueIndicators === true
   const pendingAchievement = useAppStore((state) => state.pendingAchievement)
   const setPendingAchievement = useAppStore((state) => state.setPendingAchievement)
@@ -50,32 +49,27 @@ const GameMode = () => {
       <KeyboardControls map={keyboardMap}>
         <div className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }}>
         <Canvas
-        shadows={quality !== 'low' ? 'percentage' : false}
-        dpr={quality === 'low' ? [1, 1] : [1, 1.5]}
+        shadows={false}
+        dpr={perfTier === 'low' ? [0.4, 1] : [1, 1]}
         gl={{
-          antialias: quality !== 'low',
+          antialias: false,
           powerPreference: 'high-performance',
           alpha: false,
           stencil: false,
         }}
+        style={{ display: 'block', width: '100%', height: '100%' }}
       >
-        <Physics debug={false} gravity={[0, -9.81, 0]} timeStep="vary">
-          <World />
-          <Player characterConfig={data?.character} />
-          <StatueIndicatorUpdater />
+        <Physics debug={false} gravity={[0, -9.81, 0]} timeStep={1 / 60}>
+          <AdaptivePerformanceMonitor />
+          <World performanceTier={perfTier} />
+          <Player characterConfig={data?.character} performanceTier={perfTier} />
+          <StatueIndicatorUpdater performanceTier={perfTier} />
         </Physics>
         
         <PerspectiveCamera makeDefault position={[12, 12, 12]} fov={isMobile ? 62 : 48} />
         
-        <color attach="background" args={[quality === 'low' ? '#1e293b' : '#0f172a']} />
-        <fog attach="fog" args={quality === 'low' ? ['#1e293b', 40, 120] : ['#87ceeb', 30, 150]} />
+        <color attach="background" args={['#1e293b']} />
 
-        {quality !== 'low' && (
-          <EffectComposer enableNormalPass={false}>
-            <Bloom luminanceThreshold={1.05} mipmapBlur intensity={0.2} radius={0.18} />
-            <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-          </EffectComposer>
-        )}
       </Canvas>
         </div>
       </KeyboardControls>

@@ -1,8 +1,10 @@
+import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../store/appStore'
 import { usePortfolioData } from '../hooks/usePortfolioData'
+import type { PerformanceTier } from '../hooks/usePerformanceTier'
 
 const DEFAULT_SECTION_NAMES = ['Projects', 'Work', 'Skills', 'Education', 'Contact', 'About', 'Blog']
 
@@ -14,16 +16,21 @@ function getSectionNames(data: any): string[] {
   return list.map((s: any) => s.name || s.label || s.title || 'Unknown')
 }
 
-export function StatueIndicatorUpdater() {
+export function StatueIndicatorUpdater({ performanceTier = 'high' }: { performanceTier?: PerformanceTier }) {
   const { camera, size } = useThree()
   const setStatueIndicators = useAppStore((state) => state.setStatueIndicators)
   const { data } = usePortfolioData()
   const worldPos = new THREE.Vector3()
   const projected = new THREE.Vector3()
+  const frameSkip = useRef(0)
 
   const sectionNames = data ? getSectionNames(data) : DEFAULT_SECTION_NAMES
 
   useFrame((state) => {
+    if (performanceTier === 'low') {
+      frameSkip.current++
+      if (frameSkip.current % 3 !== 0) return
+    }
     const player = state.scene.getObjectByName('player')
     if (!player) return
 

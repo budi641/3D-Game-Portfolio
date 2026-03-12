@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 
 export type ExperienceMode = 'game' | 'normal'
-export type QualityLevel = 'low' | 'high'
 
 export interface StatueIndicator {
   label: string
@@ -15,9 +14,6 @@ export interface StatueIndicator {
 interface AppState {
   mode: ExperienceMode
   setMode: (mode: ExperienceMode) => void
-  
-  quality: QualityLevel
-  setQuality: (quality: QualityLevel) => void
 
   statueIndicators: StatueIndicator[]
   setStatueIndicators: (indicators: StatueIndicator[]) => void
@@ -45,30 +41,29 @@ interface AppState {
 
   reducedMotion: boolean
   setReducedMotion: (reducedMotion: boolean) => void
+
+  performanceTier: 'high' | 'low'
+  setPerformanceTier: (tier: 'high' | 'low') => void
+
+  fps: number
+  setFps: (fps: number) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
   mode: 'normal',
   setMode: (mode) => {
     localStorage.setItem('portfolio-mode', mode)
-    set((state) => ({
-      ...state,
-      mode,
-      isLoaded: mode === 'game' ? false : state.isLoaded,
-      exploredStatueNames: mode === 'game' ? [] : state.exploredStatueNames,
-      questDismissed: mode === 'game' ? false : state.questDismissed,
-    }))
-  },
-  
-  quality: (() => {
-    const stored = localStorage.getItem('portfolio-quality')
-    if (stored === 'low' || stored === 'high') return stored as QualityLevel
-    if (stored === 'medium') return 'high' as QualityLevel
-    return 'high'
-  })(),
-  setQuality: (quality) => {
-    localStorage.setItem('portfolio-quality', quality)
-    set({ quality })
+    set((state) => {
+      const initialTier = 'low' as const
+      return {
+        ...state,
+        mode,
+        isLoaded: mode === 'game' ? false : state.isLoaded,
+        exploredStatueNames: mode === 'game' ? [] : state.exploredStatueNames,
+        questDismissed: mode === 'game' ? false : state.questDismissed,
+        performanceTier: mode === 'game' ? initialTier : state.performanceTier,
+      }
+    })
   },
 
   statueIndicators: [],
@@ -102,4 +97,10 @@ export const useAppStore = create<AppState>((set) => ({
 
   reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   setReducedMotion: (reducedMotion) => set({ reducedMotion }),
+
+  fps: 60,
+  setFps: (fps) => set({ fps }),
+
+  performanceTier: 'low',
+  setPerformanceTier: (tier) => set({ performanceTier: tier }),
 }))

@@ -1,5 +1,6 @@
 import { Suspense, useRef, useState, useMemo, type FormEvent } from 'react'
 import { useFrame } from '@react-three/fiber'
+import type { PerformanceTier } from '../hooks/usePerformanceTier'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { useAppStore } from '../store/appStore'
@@ -119,6 +120,7 @@ interface StatueProps {
   floatAmount?: number
   floatSpeed?: number
   interactionDistance?: number
+  performanceTier?: PerformanceTier
   onClick: () => void
 }
 
@@ -150,6 +152,7 @@ const Statue = ({
   floatAmount,
   floatSpeed,
   interactionDistance = 12,
+  performanceTier = 'high',
   onClick,
 }: StatueProps) => {
   const [hovered, setHovered] = useState(false)
@@ -167,6 +170,7 @@ const Statue = ({
   const worldPosRef = useRef(new THREE.Vector3())
   const targetScaleRef = useRef(new THREE.Vector3(1, 1, 1))
   const playerDirRef = useRef(new THREE.Vector3())
+  const frameSkip = useRef(0)
 
   const focusedSection = useAppStore((state) => state.focusedSection)
   const isFocused = focusedSection === name
@@ -488,6 +492,8 @@ const Statue = ({
   const renderStatueVisual = useMemo(() => {
     const modelConfig = TYPE_MODEL_MAP[type] || TYPE_MODEL_MAP.projects
     const resolvedModelUrl = modelUrl || ''
+    const scale = modelScale ?? modelConfig.scale ?? 0.3
+
     if (!resolvedModelUrl) return null
 
     return (
@@ -497,8 +503,8 @@ const Statue = ({
             url={resolvedModelUrl}
             position={modelPosition ?? [0, 0.35, 0]}
             rotation={modelRotation ?? [0, modelConfig.rotationY ?? 0, 0]}
-            scale={modelScale ?? modelConfig.scale}
-            playAnimation={modelAnimated ?? false}
+            scale={scale}
+            playAnimation={(modelAnimated ?? false) && nearby}
             clipName={animationClip}
             forceOpaque={!allowTransparency}
             renderStyle={renderStyle}
@@ -506,9 +512,13 @@ const Statue = ({
         </ModelErrorBoundary>
       </Suspense>
     )
-  }, [type, modelUrl, modelScale, modelRotation, modelPosition, modelAnimated, animationClip, allowTransparency, renderStyle])
+  }, [type, modelUrl, modelScale, modelRotation, modelPosition, modelAnimated, animationClip, allowTransparency, renderStyle, nearby, color])
 
   useFrame((state, delta) => {
+    if (performanceTier === 'low') {
+      frameSkip.current++
+      if (frameSkip.current % 3 !== 0) return
+    }
     const player = state.scene.getObjectByName('player')
     if (player && groupRef.current) {
       groupRef.current.getWorldPosition(worldPosRef.current)

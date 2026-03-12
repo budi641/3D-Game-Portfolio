@@ -1,18 +1,9 @@
 import { Square, Settings, Maximize, Ghost, Activity, Cpu } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { motion } from 'framer-motion'
-import { useState, useEffect } from 'react'
 
 const ViewportChrome = () => {
-  const { setMode, setQuality, quality, triggerRespawn } = useAppStore()
-  const [fps, setFps] = useState(60)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFps(Math.floor(Math.random() * 5) + 55)
-    }, 2000)
-    return () => clearInterval(interval)
-  }, [])
+  const { setMode, triggerRespawn, fps } = useAppStore()
 
   return (
     <motion.div 
@@ -70,24 +61,8 @@ const ViewportChrome = () => {
         </div>
       </div>
 
-      {/* Right: Settings & Quality */}
+      {/* Right: Settings */}
       <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-        <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
-          {(['low', 'high'] as const).map((q) => (
-            <button
-              key={q}
-              onClick={() => setQuality(q)}
-              className={`px-2 sm:px-3 py-1 text-[9px] sm:text-[10px] uppercase font-black transition-all rounded-lg ${
-                quality === q 
-                  ? 'bg-sky-500 text-slate-950 shadow-[0_5px_15px_rgba(56,189,248,0.4)]' 
-                  : 'text-white/40 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              {q}
-            </button>
-          ))}
-        </div>
-
         <div className="flex items-center gap-1">
           <button className="w-9 h-9 flex items-center justify-center text-white/50 hover:text-blue-400 hover:bg-blue-400/10 rounded-xl transition-colors">
             <Settings size={18} />

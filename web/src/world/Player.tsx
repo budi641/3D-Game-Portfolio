@@ -1,16 +1,22 @@
 import { useRef, useMemo, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
+import type { PerformanceTier } from '../hooks/usePerformanceTier'
 import { useKeyboardControls } from '@react-three/drei'
-import { CapsuleCollider, RigidBody, RapierRigidBody, useRapier } from '@react-three/rapier'
+import { CapsuleCollider, RigidBody, RapierRigidBody, useRapier, useBeforePhysicsStep } from '@react-three/rapier'
 import * as THREE from 'three'
 import { useAppStore } from '../store/appStore'
 
 const DEFAULT_WALK_SPEED = 5
 const DEFAULT_RUN_SPEED = 10
 const DEFAULT_JUMP_FORCE = 5
-const MOVE_ACCEL = 24
-const CAMERA_SMOOTH = 12
+const VELOCITY_SMOOTH = 10
+const CAMERA_SMOOTH = 14
+const CAMERA_LERP = 8
 const RAYCAST_SMOOTH = 8
+const ROTATION_LERP = 14
+const DELTA_CLAMP = 0.1
+const FIXED_STEP = 1 / 60
+const GROUND_RAY_LENGTH = 1.5
 const MIN_CAMERA_DISTANCE = 4.5
 const MAX_CAMERA_DISTANCE = 20
 const MOBILE_MIN_CAMERA_DISTANCE = 8
@@ -18,7 +24,7 @@ const MOBILE_MAX_CAMERA_DISTANCE = 28
 const ROTATION_SENSITIVITY = 0.005
 const ZOOM_SENSITIVITY = 0.1
 
-const Player = ({ characterConfig }: { characterConfig?: any }) => {
+const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig?: any; performanceTier?: PerformanceTier }) => {
   const rb = useRef<RapierRigidBody>(null)
   const meshRef = useRef<THREE.Group>(null)
   const [, getKeys] = useKeyboardControls()
@@ -149,51 +155,108 @@ const Player = ({ characterConfig }: { characterConfig?: any }) => {
   const lastHitDistance = useRef<number | null>(null)
   const smoothedPlayerPos = useRef(new THREE.Vector3(0, 3.2, 0))
   const smoothedHitDistance = useRef<number | null>(null)
+  const velocityXZ = useRef(new THREE.Vector2(0, 0))
+  const velocityY = useRef(0)
+  const lookTargetSmooth = useRef(new THREE.Vector3(0, 3, 0))
+  const finalCamPosRef = useRef(new THREE.Vector3())
+  const focusTargetPos = useMemo(() => new THREE.Vector3(), [])
+  const focusLookTarget = useMemo(() => new THREE.Vector3(), [])
 
-  // Handle Respawn
+  // Movement input computed in useFrame, consumed in useBeforePhysicsStep
+  const targetVelXZ = useRef({ x: 0, z: 0 })
+  const inputJump = useRef(false)
+
   useEffect(() => {
     if (rb.current) {
-        rb.current.setTranslation({ x: 0, y: 2, z: 0 }, true)
-        rb.current.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      rb.current.setTranslation({ x: 0, y: 2, z: 0 }, true)
+      velocityXZ.current.set(0, 0)
+      velocityY.current = 0
     }
   }, [respawnCount])
 
+  // Run BEFORE physics step: apply movement with fixed timestep (no physics jitter)
+  useBeforePhysicsStep(() => {
+    if (!rb.current) return
+    const pos = rb.current.translation()
+    if (useAppStore.getState().focusedSection) {
+      rb.current.setNextKinematicTranslation({ x: pos.x, y: pos.y, z: pos.z })
+      return
+    }
+    const x = pos.x
+    const y = pos.y
+    const z = pos.z
+
+    // Smooth velocity toward target
+    velocityXZ.current.x = THREE.MathUtils.lerp(velocityXZ.current.x, targetVelXZ.current.x, VELOCITY_SMOOTH * FIXED_STEP)
+    velocityXZ.current.y = THREE.MathUtils.lerp(velocityXZ.current.y, targetVelXZ.current.z, VELOCITY_SMOOTH * FIXED_STEP)
+
+    // Ground check: raycast down from capsule bottom (body center - 1)
+    const rayOrigin = { x, y: y - 1, z }
+    const rayDir = { x: 0, y: -1, z: 0 }
+    const hit = world.castRay(
+      // @ts-ignore
+      { origin: rayOrigin, dir: rayDir },
+      GROUND_RAY_LENGTH,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      rb.current
+    )
+    const toi = hit != null ? (hit.timeOfImpact ?? (hit as any).toi ?? 999) : 999
+    const grounded = toi < GROUND_RAY_LENGTH - 0.01
+
+    if (grounded) {
+      if (inputJump.current) {
+        velocityY.current = jumpForce
+      } else {
+        velocityY.current = 0
+      }
+      // Capsule bottom at ground: body.y = (y-1) - toi + 1 = y - toi
+      const groundY = y - toi
+      rb.current.setNextKinematicTranslation({
+        x: x + velocityXZ.current.x * FIXED_STEP,
+        y: groundY,
+        z: z + velocityXZ.current.y * FIXED_STEP
+      })
+    } else {
+      velocityY.current -= 9.81 * FIXED_STEP
+      rb.current.setNextKinematicTranslation({
+        x: x + velocityXZ.current.x * FIXED_STEP,
+        y: y + velocityY.current * FIXED_STEP,
+        z: z + velocityXZ.current.y * FIXED_STEP
+      })
+    }
+  })
+
+  // Run early (priority -1) so input is ready before physics step
   useFrame((state, delta) => {
     if (!rb.current || !meshRef.current) return
 
-    // Cap delta to avoid camera/lerp spikes on tab switch or frame drops
-    const dt = Math.min(delta, 0.05)
+    const dt = Math.min(delta, DELTA_CLAMP)
 
-    // If focusing on a section, interpolate camera and freeze player
     if (focusedSection) {
       const sectionObject = state.scene.getObjectByName(`statue-${focusedSection}`)
-      
       if (sectionObject) {
-        const worldPos = new THREE.Vector3()
-        sectionObject.getWorldPosition(worldPos)
-        
-        // Target position: Framing the quad at a higher comfortable level
-        const targetPos = worldPos.clone().add(new THREE.Vector3(6, 3.0, 10)) 
-        
-        // Add subtle parallax
-        const parallaxX = (Math.sin(rotation.current.y) * 1)
-        const parallaxY = (rotation.current.x * 1.5)
-        targetPos.add(new THREE.Vector3(parallaxX, parallaxY, 0))
+        sectionObject.getWorldPosition(focusTargetPos)
+        const parallaxX = Math.sin(rotation.current.y)
+        const parallaxY = rotation.current.x * 1.5
+        focusTargetPos.x += 6 + parallaxX
+        focusTargetPos.y += 3
+        focusTargetPos.z += 10
 
-        state.camera.position.lerp(targetPos, 4 * dt)
-        
-        // Look directly at the center of the 3D quad (at 2.5m)
-        const lookTarget = worldPos.clone().add(new THREE.Vector3(6, 2.5, 0))
-        lookTarget.add(new THREE.Vector3(parallaxX * 0.5, parallaxY * 0.5, 0))
+        focusLookTarget.set(
+          focusTargetPos.x - parallaxX * 0.5,
+          focusTargetPos.y - 0.5 - parallaxY * 0.5,
+          focusTargetPos.z - 10
+        )
 
+        state.camera.position.lerp(focusTargetPos, 6 * dt)
         const q1 = state.camera.quaternion.clone()
-        state.camera.lookAt(lookTarget)
+        state.camera.lookAt(focusLookTarget)
         const q2 = state.camera.quaternion.clone()
-        state.camera.quaternion.copy(q1)
-        state.camera.quaternion.slerp(q2, 4 * dt)
+        state.camera.quaternion.copy(q1).slerp(q2, 6 * dt)
       }
-      
-      rb.current.setLinvel({ x: 0, y: 0, z: 0 }, true)
       return
     }
 
@@ -219,37 +282,22 @@ const Player = ({ characterConfig }: { characterConfig?: any }) => {
     if (right) moveVec.add(camSide)
     if (Math.abs(mobileMove.current.y) > 0.02) moveVec.addScaledVector(camDir, -mobileMove.current.y)
     if (Math.abs(mobileMove.current.x) > 0.02) moveVec.addScaledVector(camSide, mobileMove.current.x)
-    
-    if (moveVec.lengthSq() > 0) {
-      moveVec.normalize()
-      
-      // Rotate mesh to face movement direction
+
+    const hasInput = moveVec.lengthSq() > 0.01
+    if (hasInput) moveVec.normalize()
+
+    const speed = sprint ? runSpeed : walkSpeed
+    targetVelXZ.current.x = hasInput ? moveVec.x * speed : 0
+    targetVelXZ.current.z = hasInput ? moveVec.z * speed : 0
+    inputJump.current = jump
+
+    if (hasInput) {
       const targetRotation = Math.atan2(moveVec.x, moveVec.z)
-      
-      // Handle rotation wrap around
       let diff = targetRotation - meshRef.current.rotation.y
       while (diff < -Math.PI) diff += Math.PI * 2
       while (diff > Math.PI) diff -= Math.PI * 2
-      
-      meshRef.current.rotation.y += diff * 10 * dt
+      meshRef.current.rotation.y = THREE.MathUtils.lerp(meshRef.current.rotation.y, meshRef.current.rotation.y + diff, ROTATION_LERP * dt)
     }
-
-    const speed = sprint ? runSpeed : walkSpeed
-    const currentVel = rb.current.linvel()
-
-    // Blend velocity for smooth acceleration; use higher factor when moving to avoid "push back" lag
-    const hasInput = moveVec.lengthSq() > 0.01
-    const blend = hasInput ? Math.min(1, MOVE_ACCEL * dt) : Math.min(1, 12 * dt)
-    const targetVx = moveVec.x * speed
-    const targetVz = moveVec.z * speed
-    const smoothVx = THREE.MathUtils.lerp(currentVel.x, targetVx, blend)
-    const smoothVz = THREE.MathUtils.lerp(currentVel.z, targetVz, blend)
-
-    rb.current.setLinvel({
-      x: smoothVx,
-      y: jump && Math.abs(currentVel.y) < 0.1 ? jumpForce : currentVel.y,
-      z: smoothVz
-    }, true)
 
     // Camera orbit logic with collision
     const playerPosRaw = rb.current.translation()
@@ -269,9 +317,9 @@ const Player = ({ characterConfig }: { characterConfig?: any }) => {
     rayDir.subVectors(idealCamPos, smoothedPlayerPos.current).normalize()
     const rayLength = smoothedPlayerPos.current.distanceTo(idealCamPos)
 
-    // Raycast every ~33ms instead of every frame to cut CPU spikes.
+    const raycastInterval = performanceTier === 'low' ? 1 / 20 : 1 / 30
     raycastAccumulator.current += dt
-    if (raycastAccumulator.current >= 1 / 30) {
+    if (raycastAccumulator.current >= raycastInterval) {
       raycastAccumulator.current = 0
       const hit = world.castRay(
         // @ts-ignore - types can be tricky between versions
@@ -304,21 +352,17 @@ const Player = ({ characterConfig }: { characterConfig?: any }) => {
         : THREE.MathUtils.lerp(smoothedHitDistance.current, rayLength, hitSmooth * 0.5)
     }
 
-    const finalCamPos = idealCamPos.clone()
     if (smoothedHitDistance.current != null && smoothedHitDistance.current < rayLength * 0.99) {
-      finalCamPos.copy(smoothedPlayerPos.current).addScaledVector(rayDir, smoothedHitDistance.current)
+      finalCamPosRef.current.copy(smoothedPlayerPos.current).addScaledVector(rayDir, smoothedHitDistance.current)
+    } else {
+      finalCamPosRef.current.copy(idealCamPos)
     }
+    finalCamPosRef.current.y = Math.max(0.1, finalCamPosRef.current.y)
 
-    // Floor safety
-    finalCamPos.y = Math.max(0.1, finalCamPos.y)
-
-    // Exponential camera lerp for smooth follow (frame-rate independent)
-    const camSmooth = 1 - Math.exp(-10 * dt)
-    state.camera.position.lerp(finalCamPos, camSmooth)
-    // Look at actual player position (not smoothed) so view doesn't lag behind when accelerating
-    lookTargetVec.set(playerPos.x, playerPos.y - 0.2, playerPos.z)
-    state.camera.lookAt(lookTargetVec)
-  })
+    state.camera.position.lerp(finalCamPosRef.current, CAMERA_LERP * dt)
+    lookTargetSmooth.current.lerp(lookTargetVec.set(playerPos.x, playerPos.y - 0.2, playerPos.z), 12 * dt)
+    state.camera.lookAt(lookTargetSmooth.current)
+  }, -1)
 
   return (
     <RigidBody
@@ -326,15 +370,15 @@ const Player = ({ characterConfig }: { characterConfig?: any }) => {
       colliders={false}
       enabledRotations={[false, false, false]}
       position={[0, 2, 0]}
-      type="dynamic"
+      type="kinematicPosition"
       name="player"
       friction={0}
     >
       <CapsuleCollider args={[0.5, 0.5]} />
       
       <group ref={meshRef}>
-        <mesh castShadow position={[0, 0, 0]}>
-          <capsuleGeometry args={[0.5, 1, 4, 16]} />
+        <mesh castShadow={false} position={[0, 0, 0]}>
+          <capsuleGeometry args={performanceTier === 'low' ? [0.5, 1, 4, 8] : [0.5, 1, 4, 16]} />
           <meshStandardMaterial color="#3b82f6" wireframe />
         </mesh>
       </group>
