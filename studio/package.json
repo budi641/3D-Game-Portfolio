@@ -1,0 +1,26 @@
+{
+  "name": "3d-game-portfolio-studio",
+  "private": true,
+  "version": "1.0.0",
+  "main": "package.json",
+  "scripts": {
+    "dev": "sanity dev",
+    "start": "sanity start",
+    "build": "sanity build",
+    "deploy": "sanity deploy",
+    "graphql": "sanity graphql"
+  },
+  "dependencies": {
+    "@sanity/cli": "^5.14.1",
+    "@sanity/color-input": "3",
+    "lucide-react": "latest",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "sanity": "^3.0.0",
+    "styled-components": "^6.0.0",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
