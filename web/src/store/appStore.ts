@@ -44,6 +44,14 @@ interface AppState {
   focusedSection: string | null
   setFocusedSection: (section: string | null) => void
 
+  /** Screen position for statue context panel (updated each frame when focused) */
+  focusedStatueScreenPos: { x: number; y: number } | null
+  setFocusedStatueScreenPos: (pos: { x: number; y: number } | null) => void
+
+  /** Metadata for the focused statue (name, type, color) */
+  focusedStatueMetadata: { name: string; type: string; color: string } | null
+  setFocusedStatueMetadata: (meta: { name: string; type: string; color: string } | null) => void
+
   reducedMotion: boolean
   setReducedMotion: (reducedMotion: boolean) => void
 
@@ -65,15 +73,15 @@ export const useAppStore = create<AppState>((set) => ({
   setMode: (mode) => {
     localStorage.setItem('portfolio-mode', mode)
     set((state) => {
-      const initialTier = 'low' as const
       return {
         ...state,
         mode,
         isLoaded: mode === 'game' ? false : state.isLoaded,
         exploredStatueNames: mode === 'game' ? [] : state.exploredStatueNames,
         questDismissed: mode === 'game' ? false : state.questDismissed,
-        performanceTier: mode === 'game' ? initialTier : state.performanceTier,
-        extremeFpsMode: mode === 'game' ? false : state.extremeFpsMode,
+        // Performance tier and extreme mode: never reset on mode switch; only page refresh restores high
+        performanceTier: mode === 'game' ? state.performanceTier : state.performanceTier,
+        extremeFpsMode: mode === 'game' ? state.extremeFpsMode : state.extremeFpsMode,
         mobileTutorialDismissed: mode === 'game' ? false : state.mobileTutorialDismissed,
       }
     })
@@ -110,7 +118,18 @@ export const useAppStore = create<AppState>((set) => ({
   triggerRespawn: () => set((state) => ({ respawnCount: state.respawnCount + 1 })),
 
   focusedSection: null,
-  setFocusedSection: (section) => set({ focusedSection: section }),
+  setFocusedSection: (section) =>
+    set((state) => ({
+      ...state,
+      focusedSection: section,
+      ...(section === null && { focusedStatueMetadata: null, focusedStatueScreenPos: null }),
+    })),
+
+  focusedStatueScreenPos: null,
+  setFocusedStatueScreenPos: (pos) => set({ focusedStatueScreenPos: pos }),
+
+  focusedStatueMetadata: null,
+  setFocusedStatueMetadata: (meta) => set({ focusedStatueMetadata: meta }),
 
   reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   setReducedMotion: (reducedMotion) => set({ reducedMotion }),
@@ -118,7 +137,7 @@ export const useAppStore = create<AppState>((set) => ({
   fps: 60,
   setFps: (fps) => set({ fps }),
 
-  performanceTier: 'low',
+  performanceTier: 'high',
   setPerformanceTier: (tier) => set({ performanceTier: tier }),
 
   extremeFpsMode: false,

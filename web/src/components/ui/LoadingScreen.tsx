@@ -27,8 +27,8 @@ const LoadingScreen = () => {
     const isGameMode = mode === 'game'
     const elapsed = performance.now() - bootStartedAt
     const hasLoadedBefore = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('game-scene-loaded') === '1'
-    const sceneReady = isGameMode ? (safeProgress >= 99 || !loadingActive) : true
-    const forcedReady = elapsed >= 8000
+    const sceneReady = isGameMode ? (safeProgress >= 95 || !loadingActive) : true
+    const forcedReady = elapsed >= 5500
 
     if (isGameMode) {
       if (hasLoadedBefore && sceneReady) {

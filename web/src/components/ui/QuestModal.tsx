@@ -34,7 +34,7 @@ export default function QuestModal() {
               </div>
             </div>
             <p className="text-sm text-white/70 leading-relaxed mb-6">
-              Navigate the world and explore each statue. Click on statues to open their content. Discover all sections to unlock a special achievement!
+              Navigate the world and explore each statue and link relic. Click on statues to open their content. Discover all statues and links to unlock the Master Explorer achievement!
             </p>
             <div className="flex gap-3">
               <button

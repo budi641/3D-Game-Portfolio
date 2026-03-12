@@ -1,9 +1,10 @@
-import { Square, Settings, Maximize, Ghost, Activity, Cpu } from 'lucide-react'
+import { Square, Settings, Maximize, RefreshCw, Activity, Cpu } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { motion } from 'framer-motion'
 
 const ViewportChrome = () => {
   const { setMode, triggerRespawn, fps } = useAppStore()
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
 
   return (
     <motion.div 
@@ -43,14 +44,15 @@ const ViewportChrome = () => {
             onClick={() => triggerRespawn()}
             className="flex items-center gap-1.5 px-2 sm:px-4 h-8 sm:h-9 bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white rounded-lg sm:rounded-xl transition-all hover:scale-105 active:scale-95 text-[10px] sm:text-xs font-bold"
           >
-            <Ghost size={14} />
+            <RefreshCw size={14} />
             <span className="hidden sm:inline">REBOOT_ENTITY</span>
           </button>
         </div>
       </div>
 
-      {/* Middle: Real-time Stats */}
-      <div className="hidden lg:flex items-center gap-8">
+      {/* Middle: Real-time Stats - hidden on mobile */}
+      {!isMobile && (
+      <div className="flex items-center gap-8">
         <div className="flex items-center gap-2">
           <Activity size={12} className="text-emerald-500" />
           <span className="text-[10px] font-mono text-emerald-500/80">{fps} FPS</span>
@@ -60,6 +62,7 @@ const ViewportChrome = () => {
           <span className="text-[10px] font-mono text-amber-500/80">LATENCY: 12ms</span>
         </div>
       </div>
+      )}
 
       {/* Right: Settings */}
       <div className="flex items-center gap-2 sm:gap-4 shrink-0">

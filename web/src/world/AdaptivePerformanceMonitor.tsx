@@ -1,22 +1,23 @@
 import { useFrame } from '@react-three/fiber'
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { useAppStore } from '../store/appStore'
 
 const FPS_SAMPLES = 30
 const FPS_LOW_THRESHOLD = 55
-const FPS_HIGH_THRESHOLD = 58
 const FRAMES_TO_DROP = 3
-const FRAMES_TO_UPGRADE = 400
 const FPS_UPDATE_INTERVAL = 30
 
 const EXTREME_FPS_THRESHOLD = 20
-const EXTREME_FPS_RECOVERY = 28
-const EXTREME_LOW_DURATION = 5
-const EXTREME_RECOVERY_DURATION = 3
+const EXTREME_LOW_DURATION = 3
+const LARGE_DELTA_THRESHOLD = 0.2 // Skip frames after tab return (rAF can spike)
 
 /**
- * Measures FPS and adjusts performance tier to maintain 60 FPS.
- * When FPS drops below 25 for 5+ seconds, enables extreme mode (hides decorative models).
+ * Measures FPS and degrades performance one-way only (never recovers until page refresh).
+ * - Start at high performance.
+ * - If FPS < 55 for FRAMES_TO_DROP consecutive samples → switch to low.
+ * - If FPS < 20 for 3+ seconds (while in low) → switch to extreme (25% res, hide decorative models).
+ * - No recovery: only a full page refresh returns to high.
+ * - Skips checks when tab is hidden; resets counters on visibility change to avoid false degradation.
  */
 export function AdaptivePerformanceMonitor() {
   const setPerformanceTier = useAppStore((state) => state.setPerformanceTier)
@@ -24,12 +25,24 @@ export function AdaptivePerformanceMonitor() {
   const setExtremeFpsMode = useAppStore((state) => state.setExtremeFpsMode)
   const deltas = useRef<number[]>([])
   const lowFrames = useRef(0)
-  const highFrames = useRef(0)
   const frameCount = useRef(0)
   const extremeLowTime = useRef(0)
-  const extremeRecoveryTime = useRef(0)
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        lowFrames.current = 0
+        extremeLowTime.current = 0
+        deltas.current = []
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [])
 
   useFrame((_, delta) => {
+    if (document.hidden) return
+    if (delta > LARGE_DELTA_THRESHOLD) return // Skip after tab return (spike causes false low FPS)
     deltas.current.push(delta)
     if (deltas.current.length > FPS_SAMPLES) deltas.current.shift()
 
@@ -47,41 +60,25 @@ export function AdaptivePerformanceMonitor() {
     const tier = useAppStore.getState().performanceTier
     const extremeMode = useAppStore.getState().extremeFpsMode
 
-    if (fps < FPS_LOW_THRESHOLD) {
+    // One-way: high → low when FPS drops below threshold for N frames
+    if (fps < FPS_LOW_THRESHOLD && tier === 'high') {
       lowFrames.current++
-      highFrames.current = 0
-      if (tier === 'high' && lowFrames.current >= FRAMES_TO_DROP) {
+      if (lowFrames.current >= FRAMES_TO_DROP) {
         setPerformanceTier('low')
         lowFrames.current = 0
       }
-    } else if (fps > FPS_HIGH_THRESHOLD) {
-      highFrames.current++
-      lowFrames.current = 0
-      if (tier === 'low' && highFrames.current >= FRAMES_TO_UPGRADE) {
-        setPerformanceTier('high')
-        highFrames.current = 0
-      }
     } else {
       lowFrames.current = 0
-      highFrames.current = 0
     }
 
-    // Extreme mode: hide decorative models when FPS < 20 for 5+ seconds
-    if (fps < EXTREME_FPS_THRESHOLD) {
+    // One-way: low → extreme when FPS < 20 for 3+ seconds (no recovery until refresh)
+    if (!extremeMode && fps < EXTREME_FPS_THRESHOLD) {
       extremeLowTime.current += delta
-      extremeRecoveryTime.current = 0
-      if (!extremeMode && extremeLowTime.current >= EXTREME_LOW_DURATION) {
+      if (extremeLowTime.current >= EXTREME_LOW_DURATION) {
         setExtremeFpsMode(true)
-      }
-    } else if (fps > EXTREME_FPS_RECOVERY) {
-      extremeRecoveryTime.current += delta
-      extremeLowTime.current = 0
-      if (extremeMode && extremeRecoveryTime.current >= EXTREME_RECOVERY_DURATION) {
-        setExtremeFpsMode(false)
       }
     } else {
       extremeLowTime.current = 0
-      extremeRecoveryTime.current = 0
     }
   })
 

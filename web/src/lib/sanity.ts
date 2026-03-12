@@ -4,8 +4,8 @@ import { createImageUrlBuilder } from '@sanity/image-url'
 export const client = createClient({
   projectId: 'wsg4349i',
   dataset: 'production',
-  // In dev we want fresh updates from Studio (no CDN cache).
-  useCdn: import.meta.env.PROD,
+  // Disable CDN to always fetch fresh data from API (avoids stale/empty cache)
+  useCdn: false,
   apiVersion: '2023-05-03',
 })
 

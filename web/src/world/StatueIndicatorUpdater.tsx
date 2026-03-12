@@ -4,27 +4,29 @@ import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../store/appStore'
 import { usePortfolioData } from '../hooks/usePortfolioData'
+import { resolveSections } from '../lib/resolvedSections'
 import type { PerformanceTier } from '../hooks/usePerformanceTier'
 
-const DEFAULT_SECTION_NAMES = ['Projects', 'Work', 'Skills', 'Education', 'Contact', 'About', 'Blog']
+const PANEL_MAX_W = 560
+const PANEL_MAX_H = 700
 
 function getSectionNames(data: any): string[] {
-  const sceneSections = Array.isArray(data?.scene?.sectionStatues) && data.scene.sectionStatues.length > 0
-    ? data.scene.sectionStatues
-    : null
-  const list = sceneSections || (data?.sections?.length > 0 ? data.sections : DEFAULT_SECTION_NAMES.map((n) => ({ name: n })))
-  return list.map((s: any) => s.name || s.label || s.title || 'Unknown')
+  const sectionRadius = typeof data?.scene?.sectionRadius === 'number' ? data.scene.sectionRadius : 52
+  const sections = resolveSections(data, sectionRadius)
+  return sections.map((s) => s.name)
 }
 
 export function StatueIndicatorUpdater({ performanceTier = 'high' }: { performanceTier?: PerformanceTier }) {
   const { camera, size } = useThree()
   const setStatueIndicators = useAppStore((state) => state.setStatueIndicators)
+  const setFocusedStatueScreenPos = useAppStore((state) => state.setFocusedStatueScreenPos)
+  const focusedSection = useAppStore((state) => state.focusedSection)
   const { data } = usePortfolioData()
   const worldPos = new THREE.Vector3()
   const projected = new THREE.Vector3()
   const frameSkip = useRef(0)
 
-  const sectionNames = data ? getSectionNames(data) : DEFAULT_SECTION_NAMES
+  const sectionNames = getSectionNames(data ?? {})
 
   useFrame((state) => {
     if (performanceTier === 'low') {
@@ -41,7 +43,7 @@ export function StatueIndicatorUpdater({ performanceTier = 'high' }: { performan
 
     const indicators: { label: string; screenX: number; screenY: number; angle: number; visible: boolean; distance: number }[] = []
 
-    sectionNames.forEach((name) => {
+    sectionNames.forEach((name: string) => {
       const obj = state.scene.getObjectByName(`statue-${name}`)
       if (!obj) return
 
@@ -84,6 +86,27 @@ export function StatueIndicatorUpdater({ performanceTier = 'high' }: { performan
     })
 
     setStatueIndicators(indicators)
+
+    // Update focused statue panel screen position (position near statue, clamped to viewport)
+    if (focusedSection) {
+      const obj = state.scene.getObjectByName(`statue-${focusedSection}`)
+      if (obj) {
+        obj.getWorldPosition(worldPos)
+        projected.copy(worldPos).project(camera)
+        let screenX = (projected.x * 0.5 + 0.5) * size.width
+        let screenY = (-projected.y * 0.5 + 0.5) * size.height
+        const panelW = Math.min(size.width * 0.96, PANEL_MAX_W)
+        const panelH = Math.min(size.height * 0.9, PANEL_MAX_H)
+        const margin = 12
+        screenX = THREE.MathUtils.clamp(screenX, panelW / 2 + margin, size.width - panelW / 2 - margin)
+        screenY = THREE.MathUtils.clamp(screenY, panelH / 2 + margin, size.height - panelH / 2 - margin)
+        setFocusedStatueScreenPos({ x: screenX, y: screenY })
+      } else {
+        setFocusedStatueScreenPos(null)
+      }
+    } else {
+      setFocusedStatueScreenPos(null)
+    }
   })
 
   return null

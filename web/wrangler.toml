@@ -1,0 +1,7 @@
+# Cloudflare Pages configuration
+# Used when deploying via: npm run deploy
+# For Git-based deploys, configure in the Cloudflare dashboard instead.
+
+name = "3d-game-portfolio"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-01-01"

@@ -8,7 +8,6 @@ import { useAppStore } from '../store/appStore'
 
 const DEFAULT_WALK_SPEED = 5
 const DEFAULT_RUN_SPEED = 10
-const DEFAULT_JUMP_FORCE = 5
 const VELOCITY_SMOOTH = 10
 const CAMERA_SMOOTH = 14
 const CAMERA_LERP = 8
@@ -17,9 +16,7 @@ const ROTATION_LERP = 14
 const DELTA_CLAMP = 0.1
 const FIXED_STEP = 1 / 60
 const GROUND_RAY_LENGTH = 1.5
-const MIN_CAMERA_DISTANCE = 4.5
 const MAX_CAMERA_DISTANCE = 20
-const MOBILE_MIN_CAMERA_DISTANCE = 8
 const MOBILE_MAX_CAMERA_DISTANCE = 28
 const ROTATION_SENSITIVITY = 0.005
 const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig?: any; performanceTier?: PerformanceTier }) => {
@@ -30,9 +27,13 @@ const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig
   const focusedSection = useAppStore((state) => state.focusedSection)
   const { world } = useRapier()
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
-  const walkSpeed = typeof characterConfig?.walkSpeed === 'number' ? characterConfig.walkSpeed : DEFAULT_WALK_SPEED
-  const runSpeed = typeof characterConfig?.runSpeed === 'number' ? characterConfig.runSpeed : DEFAULT_RUN_SPEED
-  const jumpForce = typeof characterConfig?.jumpForce === 'number' ? characterConfig.jumpForce : DEFAULT_JUMP_FORCE
+  const parseSpeed = (v: unknown, fallback: number) => {
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v
+    const n = Number(v)
+    return Number.isFinite(n) && n > 0 ? n : fallback
+  }
+  const walkSpeed = parseSpeed(characterConfig?.walkSpeed, DEFAULT_WALK_SPEED)
+  const runSpeed = parseSpeed(characterConfig?.runSpeed, DEFAULT_RUN_SPEED)
   const maxCamDistance = isMobile ? MOBILE_MAX_CAMERA_DISTANCE : MAX_CAMERA_DISTANCE
 
   // Camera Orbit State - distance fixed at max (no scroll zoom)
@@ -128,7 +129,6 @@ const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig
       window.removeEventListener('mousedown', handleMouseDown)
       window.removeEventListener('mouseup', handleMouseUp)
       window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('wheel', handleWheel)
       window.removeEventListener('touchstart', handleTouchStart)
       window.removeEventListener('touchmove', handleTouchMove)
       window.removeEventListener('touchend', handleTouchEnd)
@@ -156,7 +156,6 @@ const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig
 
   // Movement input computed in useFrame, consumed in useBeforePhysicsStep
   const targetVelXZ = useRef({ x: 0, z: 0 })
-  const inputJump = useRef(false)
 
   useEffect(() => {
     if (rb.current) {
@@ -199,11 +198,7 @@ const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig
     const grounded = toi < GROUND_RAY_LENGTH - 0.01
 
     if (grounded) {
-      if (inputJump.current) {
-        velocityY.current = jumpForce
-      } else {
-        velocityY.current = 0
-      }
+      velocityY.current = 0
       // Capsule bottom at ground: body.y = (y-1) - toi + 1 = y - toi
       const groundY = y - toi
       rb.current.setNextKinematicTranslation({
@@ -257,7 +252,7 @@ const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig
     rotation.current.x = THREE.MathUtils.lerp(rotation.current.x, rotationTarget.current.x, rotSmooth)
     rotation.current.y = THREE.MathUtils.lerp(rotation.current.y, rotationTarget.current.y, rotSmooth)
 
-    const { forward, backward, left, right, jump, sprint } = getKeys()
+    const { forward, backward, left, right, sprint } = getKeys()
     
     // Get camera directions (flattened to XZ plane)
     state.camera.getWorldDirection(camDir)
@@ -278,10 +273,9 @@ const Player = ({ characterConfig, performanceTier = 'high' }: { characterConfig
     const hasInput = moveVec.lengthSq() > 0.01
     if (hasInput) moveVec.normalize()
 
-    const speed = sprint ? runSpeed : walkSpeed
+    const speed = isMobile ? runSpeed : (sprint ? runSpeed : walkSpeed)
     targetVelXZ.current.x = hasInput ? moveVec.x * speed : 0
     targetVelXZ.current.z = hasInput ? moveVec.z * speed : 0
-    inputJump.current = jump
 
     if (hasInput) {
       const targetRotation = Math.atan2(moveVec.x, moveVec.z)

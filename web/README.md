@@ -71,3 +71,25 @@ export default defineConfig([
   },
 ])
 ```
+
+## Deploy to Cloudflare Pages
+
+### Option A: Git integration (recommended)
+
+1. Push your repo to GitHub/GitLab.
+2. In [Cloudflare Dashboard](https://dash.cloudflare.com) → **Pages** → **Create a project** → **Connect to Git**.
+3. Select the repo and configure:
+   - **Root directory:** `web`
+   - **Build command:** `npm run build`
+   - **Build output directory:** `dist`
+4. Deploy. New commits to the main branch will auto-deploy.
+
+### Option B: Wrangler CLI
+
+1. Install dependencies: `npm install`
+2. Log in: `npx wrangler login`
+3. Deploy: `npm run deploy`
+
+This builds the app and deploys the `dist` folder to Cloudflare Pages. The first run will prompt you to create the project if it doesn't exist.
+
+**Note:** If your repo root is the project root (not `web/`), set **Root directory** to `web` in the Cloudflare dashboard so the build runs from the correct folder.

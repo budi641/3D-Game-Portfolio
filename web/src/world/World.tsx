@@ -10,17 +10,6 @@ import Statue from './Statue'
 import CdnAnimatedModel from './CdnAnimatedModel'
 import ModelErrorBoundary from '../components/system/ModelErrorBoundary'
 
-type DefaultSection = {
-  name: string
-  pos: [number, number, number]
-  color: string
-  archetype: 'projects' | 'education' | 'work' | 'skills' | 'contact' | 'about' | 'blog'
-  modelUrl: string
-  modelScale: number
-  modelRotationY?: number
-  modelAnimated?: boolean
-}
-
 type LinkRelicConfig = {
   id: string
   label: string
@@ -58,47 +47,7 @@ type ScenePlacedModelConfig = {
   glowRingIntensity?: number
 }
 
-function toHexColor(value: any, fallback: string) {
-  if (typeof value === 'string' && value.trim()) return value
-  if (value && typeof value === 'object' && typeof value.hex === 'string' && value.hex.trim()) return value.hex
-  return fallback
-}
-
-const DEFAULT_SECTIONS: DefaultSection[] = [
-  { name: 'Projects', pos: [0, 0, -48], color: '#3b82f6', archetype: 'projects', modelUrl: '/Models/Projects.glb', modelScale: 1, modelRotationY: 0, modelAnimated: false },
-  { name: 'Education', pos: [34, 0, -34], color: '#22c55e', archetype: 'education', modelUrl: '/Models/education.glb', modelScale: 1, modelRotationY: 0, modelAnimated: false },
-  { name: 'Work', pos: [-34, 0, -34], color: '#ef4444', archetype: 'work', modelUrl: '/Models/Work.glb', modelScale: 1, modelRotationY: 0, modelAnimated: false },
-  { name: 'Skills', pos: [48, 0, 0], color: '#f59e0b', archetype: 'skills', modelUrl: '/Models/skill.glb', modelScale: 1, modelRotationY: 0, modelAnimated: false },
-  { name: 'Contact', pos: [-48, 0, 0], color: '#8b5cf6', archetype: 'contact', modelUrl: '/Models/Contact.glb', modelScale: 1, modelRotationY: 0, modelAnimated: false },
-  { name: 'About', pos: [34, 0, 34], color: '#06b6d4', archetype: 'about', modelUrl: '/Models/About me.glb', modelScale: 1, modelRotationY: 0, modelAnimated: false },
-  { name: 'Blog', pos: [-34, 0, 34], color: '#f97316', archetype: 'blog', modelUrl: '/Models/Blog.glb', modelScale: 1, modelRotationY: 0, modelAnimated: false },
-]
-
-const LINK_RELICS: LinkRelicConfig[] = [
-  { id: 'github', label: 'GitHub', url: 'https://github.com', position: [-12, 0, 74], color: '#f8fafc', modelUrl: '/Models/github.glb', modelScale: 1.2, modelRotation: [0, 0.2, 0], modelAnimated: true, spinSpeed: 1.1, floatAmount: 0.22, floatSpeed: 1.8, glowIntensity: 2.2 },
-  { id: 'linkedin', label: 'LinkedIn', url: 'https://linkedin.com', position: [0, 0, 78], color: '#0ea5e9', modelUrl: '/Models/Linked In.glb', modelScale: 2.8, modelRotation: [0, 0.1, 0], modelAnimated: true, spinSpeed: 1.1, floatAmount: 0.22, floatSpeed: 1.8, glowIntensity: 2.2 },
-  { id: 'resume', label: 'Resume', url: '/resume', position: [12, 0, 74], color: '#ef4444', modelUrl: '/Models/Resume.glb', modelScale: 1.8, modelRotation: [0, -0.2, 0], modelAnimated: true, spinSpeed: 1.1, floatAmount: 0.22, floatSpeed: 1.8, glowIntensity: 2.2 },
-]
-
-function circularPoint(index: number, total: number, radius: number, startAngle = -Math.PI / 2): [number, number, number] {
-  const angle = startAngle + (index / Math.max(total, 1)) * Math.PI * 2
-  return [Math.cos(angle) * radius, 0, Math.sin(angle) * radius]
-}
-
-function normalizeKey(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, '-')
-}
-
-function mapLegacyTypeToArchetype(value: string | undefined): DefaultSection['archetype'] | null {
-  if (!value) return null
-  const t = value.toLowerCase()
-  if (t === 'gear') return 'projects'
-  if (t === 'pillar') return 'work'
-  if (t === 'core') return 'skills'
-  if (t === 'utility') return 'contact'
-  if (t === 'hero') return 'about'
-  return null
-}
+import { resolveSections, resolveLinkRelics, toHexColor } from '../lib/resolvedSections'
 
 function StylizedSky({ performanceTier }: { performanceTier: PerformanceTier }) {
   const [skyTexture, setSkyTexture] = useState<THREE.Texture | null>(null)
@@ -162,6 +111,7 @@ function LinkRelic({
   glowIntensity = 2.2,
   renderStyle = 'pbr',
   performanceTier = 'high',
+  totalDiscoverables = 10,
 }: {
   label: string
   url: string
@@ -178,13 +128,18 @@ function LinkRelic({
   glowIntensity?: number
   renderStyle?: 'pbr' | 'cel'
   performanceTier?: PerformanceTier
+  totalDiscoverables?: number
 }) {
+  const addExploredStatue = useAppStore((state) => state.addExploredStatue)
+  const exploredStatueNames = useAppStore((state) => state.exploredStatueNames)
+  const setPendingAchievement = useAppStore((state) => state.setPendingAchievement)
   const relicRef = useRef<THREE.Group>(null)
   const frameSkip = useRef(0)
   const modelGroupRef = useRef<THREE.Group>(null)
   const baseMatRef = useRef<THREE.MeshStandardMaterial>(null)
   const ringMatRef = useRef<THREE.MeshBasicMaterial>(null)
   const ringMeshRef = useRef<THREE.Mesh>(null)
+  const discoveredRef = useRef(false)
   const [hovered, setHovered] = useState(false)
   const [nearby, setNearby] = useState(false)
   const nearbyRef = useRef(false)
@@ -192,21 +147,11 @@ function LinkRelic({
   const hoverAmountRef = useRef(0)
   const relicWorldPos = useMemo(() => new THREE.Vector3(), [])
   const toPlayerRef = useMemo(() => new THREE.Vector3(), [])
-  const targetScaleRef = useMemo(() => new THREE.Vector3(1, 1, 1), [])
   const scaleInitialized = useRef(false)
   const interactionDistance = 14
   const transitionDistance = 20
 
   useFrame((state, delta) => {
-    // Set correct scale immediately on first frame (before frame skip) so models don't lerp from 1
-    if (modelGroupRef.current && !scaleInitialized.current) {
-      scaleInitialized.current = true
-      modelGroupRef.current.scale.set(modelScale, modelScale, modelScale)
-    }
-    if (performanceTier === 'low') {
-      frameSkip.current++
-      if (frameSkip.current % 4 !== 0) return
-    }
     if (relicRef.current) {
       relicRef.current.getWorldPosition(relicWorldPos)
       const playerObj = state.scene.getObjectByName('player')
@@ -217,9 +162,21 @@ function LinkRelic({
       if (isNowNearby !== nearbyRef.current) {
         nearbyRef.current = isNowNearby
         setNearby(isNowNearby)
+        if (isNowNearby && !discoveredRef.current) {
+          discoveredRef.current = true
+          const wasNew = !exploredStatueNames.includes(label)
+          if (wasNew) {
+            addExploredStatue(label)
+            const newCount = exploredStatueNames.length + 1
+            if (newCount >= totalDiscoverables) {
+              setPendingAchievement({ message: 'Master Explorer', subtext: 'All statues and links discovered!', isBig: true })
+            } else {
+              setPendingAchievement({ message: `Discovered: ${label}`, subtext: `${newCount}/${totalDiscoverables} discovered`, isBig: false })
+            }
+          }
+        }
       }
 
-      // Smooth near factor in [0..1] between transitionDistance -> interactionDistance.
       const rawNear = THREE.MathUtils.clamp(
         (transitionDistance - dist) / Math.max(0.001, transitionDistance - interactionDistance),
         0,
@@ -238,9 +195,27 @@ function LinkRelic({
     hoverAmountRef.current = THREE.MathUtils.damp(hoverAmountRef.current, hoverTarget, 12, delta)
 
     const nearFactor = nearAmountRef.current
+    if (modelGroupRef.current) {
+      const baseScale = modelScale
+      const proximityMultiplier = 1 + nearFactor * 0.2 + hoverAmountRef.current * 0.04
+      const targetScale = baseScale * proximityMultiplier
+      if (!scaleInitialized.current) {
+        scaleInitialized.current = true
+        modelGroupRef.current.scale.setScalar(targetScale)
+      } else {
+        const lerpAlpha = 1 - Math.exp(-8 * delta)
+        const current = modelGroupRef.current.scale.x
+        const smoothed = THREE.MathUtils.lerp(current, targetScale, lerpAlpha)
+        modelGroupRef.current.scale.setScalar(smoothed)
+      }
+    }
+
+    if (performanceTier === 'low') {
+      frameSkip.current++
+      if (frameSkip.current % 4 !== 0) return
+    }
 
     if (modelGroupRef.current) {
-      // State 1 (idle): slight hover/rotation. State 2 (near): faster/livelier movement.
       const spin = spinSpeed * (0.14 + (1 - nearFactor) * 0.55)
       const bobAmount = floatAmount * (0.14 + nearFactor * 0.9)
       const bobSpeed = floatSpeed * (0.42 + nearFactor * 0.95)
@@ -252,12 +227,6 @@ function LinkRelic({
         modelGroupRef.current.rotation.y += spin * delta
       }
       modelGroupRef.current.position.y = modelPosition[1] + Math.sin(state.clock.elapsedTime * bobSpeed) * bobAmount
-
-      const proximityScale = 1 + nearFactor * 0.255 + hoverAmountRef.current * 0.085
-      const combinedScale = modelScale * proximityScale
-      targetScaleRef.set(combinedScale, combinedScale, combinedScale)
-      const alpha = 1 - Math.exp(-10 * delta)
-      modelGroupRef.current.scale.lerp(targetScaleRef, alpha)
     }
 
     if (baseMatRef.current) {
@@ -320,7 +289,7 @@ function LinkRelic({
         {modelUrl && (
           <Suspense fallback={null}>
             <ModelErrorBoundary fallback={null}>
-              <group ref={(node) => { modelGroupRef.current = node }}>
+              <group ref={modelGroupRef}>
                 <CdnAnimatedModel
                   url={modelUrl}
                   position={modelPosition}
@@ -436,6 +405,7 @@ function ScenePlacedModel({
 
 const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier }) => {
   const setFocusedSection = useAppStore((state) => state.setFocusedSection)
+  const setFocusedStatueMetadata = useAppStore((state) => state.setFocusedStatueMetadata)
   const addExploredStatue = useAppStore((state) => state.addExploredStatue)
   const exploredStatueNames = useAppStore((state) => state.exploredStatueNames)
   const setTotalStatueCount = useAppStore((state) => state.setTotalStatueCount)
@@ -445,105 +415,40 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
   const renderStyle = (data?.scene?.renderStyle === 'pbr' ? 'pbr' : 'cel') as 'pbr' | 'cel'
   const sectionRadius = typeof data?.scene?.sectionRadius === 'number' ? data.scene.sectionRadius : 52
 
-  const sections = useMemo(() => {
-    const sceneSections = Array.isArray(data?.scene?.sectionStatues) && data.scene.sectionStatues.length > 0
-      ? data.scene.sectionStatues
-      : null
-    const list = sceneSections || (data?.sections?.length > 0 ? data.sections : DEFAULT_SECTIONS)
-    const orderedList = [...list].sort((a: any, b: any) => {
-      const ao = typeof a?.order === 'number' ? a.order : 9999
-      const bo = typeof b?.order === 'number' ? b.order : 9999
-      return ao - bo
-    })
-    const sectionRelics = data?.scene?.sectionRelics || {}
-    return orderedList.map((s: any, i: number) => {
-      const section = DEFAULT_SECTIONS[i % DEFAULT_SECTIONS.length]
-      const idKey = normalizeKey((s.id || s.archetype || section.archetype || '').toString())
-      const fixedRelic = sectionRelics[idKey] || null
-      const name = fixedRelic?.label || s.label || s.name || s.title || section.name
-      const key = normalizeKey(name)
-      const matched = DEFAULT_SECTIONS.find((d) => normalizeKey(d.name) === key) || section
-      const explicitArchetype = (s.archetype as DefaultSection['archetype'] | undefined) || mapLegacyTypeToArchetype(s.type)
-      const modelRotation =
-        Array.isArray(s.statueModelRotation) && s.statueModelRotation.length === 3
-          ? [s.statueModelRotation[0], s.statueModelRotation[1], s.statueModelRotation[2]]
-          : [0, typeof s.statueModelRotationY === 'number' ? s.statueModelRotationY : (matched.modelRotationY || 0), 0]
-      const modelPosition =
-        Array.isArray(fixedRelic?.modelPosition) && fixedRelic.modelPosition.length === 3
-          ? [fixedRelic.modelPosition[0], fixedRelic.modelPosition[1], fixedRelic.modelPosition[2]]
-          :
-        Array.isArray(s.modelPosition) && s.modelPosition.length === 3
-          ? [s.modelPosition[0], s.modelPosition[1], s.modelPosition[2]]
-          :
-        Array.isArray(s.statueModelPosition) && s.statueModelPosition.length === 3
-          ? [s.statueModelPosition[0], s.statueModelPosition[1], s.statueModelPosition[2]]
-          : [0, 0.35, 0]
-      return {
-        ...s,
-        name,
-        position: circularPoint(i, list.length, sectionRadius),
-        color: toHexColor(fixedRelic?.color || s.color, matched.color),
-        archetype: explicitArchetype || matched.archetype,
-        statueModelUrl: s.statueModelUrl || s.modelUrl || matched.modelUrl,
-        statueModelScale:
-          typeof s.statueModelScale === 'number'
-            ? s.statueModelScale
-            : (typeof fixedRelic?.modelScale === 'number'
-              ? fixedRelic.modelScale
-              : (typeof s.modelScale === 'number' ? s.modelScale : matched.modelScale)),
-        statueModelRotation: modelRotation as [number, number, number],
-        statueModelPosition: modelPosition as [number, number, number],
-        statueModelAnimated: typeof s.statueModelAnimated === 'boolean' ? s.statueModelAnimated : false,
-        statueAnimationClip: typeof s.statueAnimationClip === 'string' ? s.statueAnimationClip : undefined,
-        statueAllowTransparency: typeof s.statueAllowTransparency === 'boolean' ? s.statueAllowTransparency : false,
-        statueSpinSpeed: typeof s.statueSpinSpeed === 'number' ? s.statueSpinSpeed : 0.35,
-        statueFloatAmount: typeof s.statueFloatAmount === 'number' ? s.statueFloatAmount : 0.06,
-        statueFloatSpeed: typeof s.statueFloatSpeed === 'number' ? s.statueFloatSpeed : 1.8,
-        statueInteractionDistance: typeof s.statueInteractionDistance === 'number' ? s.statueInteractionDistance : 12,
-        statueGlowIntensity: typeof s.statueGlowIntensity === 'number' ? s.statueGlowIntensity : 8,
-      }
-    })
-  }, [data?.sections, data?.scene?.sectionStatues, data?.scene?.sectionRelics, sectionRadius])
+  const sections = useMemo(
+    () => resolveSections(data, sectionRadius),
+    [data, sectionRadius]
+  )
 
-  const linkRelics = useMemo(() => {
-    const rel = data?.scene?.linkRelics || {}
-    const radiusDelta = sectionRadius - 52
-    return LINK_RELICS.map((base) => {
-      const match = rel[base.id] || (base.id === 'resume' ? rel.itch : null) || null
-      const shiftedPosition: [number, number, number] = [base.position[0], base.position[1], base.position[2] + radiusDelta]
-      if (!match) return { ...base, position: shiftedPosition }
-      const modelPos = Array.isArray(match.modelPosition) && match.modelPosition.length === 3
-        ? [match.modelPosition[0], match.modelPosition[1], match.modelPosition[2]]
-        : base.modelPosition
-      return {
-        ...base,
-        position: shiftedPosition,
-        label: match.label || base.label,
-        url: match.url || base.url,
-        color: toHexColor(match.color, base.color),
-        modelScale: typeof match.modelScale === 'number' ? match.modelScale : base.modelScale,
-        modelPosition: modelPos as [number, number, number] | undefined,
-      }
-    })
-  }, [data?.scene?.linkRelics, sectionRadius])
+  const linkRelics = useMemo(
+    () => resolveLinkRelics(data, sectionRadius),
+    [data, sectionRadius]
+  )
+
+  const totalDiscoverables = sections.length + linkRelics.length
 
   useEffect(() => {
-    setTotalStatueCount(sections.length)
-  }, [sections.length, setTotalStatueCount])
+    setTotalStatueCount(totalDiscoverables)
+  }, [totalDiscoverables, setTotalStatueCount])
 
-  const handleStatueClick = (name: string) => {
-    setFocusedSection(name)
+  const handleStatueDiscovery = (name: string) => {
     const wasNew = !exploredStatueNames.includes(name)
     addExploredStatue(name)
     if (wasNew) {
       const newCount = exploredStatueNames.length + 1
-      const total = sections.length
-      if (newCount >= total) {
-        setPendingAchievement({ message: 'Master Explorer', subtext: 'All statues discovered!', isBig: true })
+      if (newCount >= totalDiscoverables) {
+        setPendingAchievement({ message: 'Master Explorer', subtext: 'All statues and links discovered!', isBig: true })
       } else {
-        setPendingAchievement({ message: `Discovered: ${name}`, subtext: `${newCount}/${total} statues`, isBig: false })
+        setPendingAchievement({ message: `Discovered: ${name}`, subtext: `${newCount}/${totalDiscoverables} discovered`, isBig: false })
       }
     }
+  }
+
+  const handleStatueClick = (section: { name: string; archetype: string; color: string }) => {
+    const name = section.name
+    setFocusedSection(name)
+    setFocusedStatueMetadata({ name, type: section.archetype, color: section.color })
+    handleStatueDiscovery(name)
   }
 
   const linkPathCenterZ = sectionRadius - 16
@@ -614,11 +519,11 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
               </mesh>
             </RigidBody>
 
-            {/* Platform - Elevated start at surface */}
+            {/* Platform - Elevated circular base */}
             <group position={section.position}>
                <RigidBody type="fixed" colliders={false} position={[0, 0.05, 0]}>
                  <mesh receiveShadow castShadow>
-                    <boxGeometry args={[10, 0.1, 10]} />
+                    <cylinderGeometry args={[5.5, 5.5, 0.1, 64]} />
                     <meshStandardMaterial color="#0d1117" roughness={1} />
                  </mesh>
                  
@@ -654,16 +559,15 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
                 floatSpeed={section.statueFloatSpeed}
                 interactionDistance={section.statueInteractionDistance}
                 performanceTier={performanceTier}
-                onClick={() => handleStatueClick(section.name)}
+                onClick={() => handleStatueClick(section)}
+                onNearby={() => handleStatueDiscovery(section.name)}
               />
             </group>
           </group>
         )
       })}
 
-      {!extremeFpsMode && (
-        <>
-      {/* Dedicated link plaza path + platform */}
+      {/* Dedicated link plaza path + platform - always visible */}
       <RigidBody type="fixed" colliders={false} position={[0, 0.02, linkPathCenterZ]} rotation={[0, 0, 0]}>
         <mesh receiveShadow>
           <boxGeometry args={[4.5, 0.05, linkPathLength]} />
@@ -681,7 +585,7 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
         </mesh>
       </RigidBody>
 
-      {/* Tiny interactive link relics */}
+      {/* Tiny interactive link relics - always visible */}
       {linkRelics.map((item: LinkRelicConfig) => (
         <LinkRelic
           key={item.id}
@@ -699,12 +603,12 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
           floatAmount={item.floatAmount}
           floatSpeed={item.floatSpeed}
           glowIntensity={item.glowIntensity}
+          totalDiscoverables={totalDiscoverables}
           performanceTier={performanceTier}
         />
       ))}
-        </>
-      )}
 
+      {/* Custom scene models - decorative only, hidden in extreme mode */}
       {!extremeFpsMode && sceneModels.map((item: ScenePlacedModelConfig, idx: number) => (
         <ScenePlacedModel key={`${item.name || 'scene-model'}-${idx}`} item={item} renderStyle={renderStyle} performanceTier={performanceTier} />
       ))}

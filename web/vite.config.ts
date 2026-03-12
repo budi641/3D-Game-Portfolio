@@ -9,6 +9,20 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  optimizeDeps: {
+    include: ['@sanity/color-input'],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('@sanity/color-input')) {
+            return 'sanity-color-input'
+          }
+        },
+      },
+    },
+  },
   resolve: {
     alias: [
       // Force exact 'sanity' import to use web's package (avoids studio's sanity 3.x)

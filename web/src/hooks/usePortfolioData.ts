@@ -22,7 +22,7 @@ export function usePortfolioData() {
           "url": asset->url
         }
       },
-      "sections": *[_type == "section"],
+      "sections": *[_type == "section"] | order(order asc),
       "skills": *[_type == "skill"] | order(category asc),
       "experience": *[_type == "experience"] | order(period desc),
       "education": *[_type == "education"],
@@ -31,6 +31,16 @@ export function usePortfolioData() {
       "character": *[_type == "character"] | order(_updatedAt desc)[0],
       "scene": *[_type == "scene"] | order(_updatedAt desc)[0]{
         ...,
+        "sectionRelics": coalesce(sectionRelics, {}){
+          "projects": coalesce(projects, {}){ label, url, color, modelScale, modelPosition },
+          "education": coalesce(education, {}){ label, url, color, modelScale, modelPosition },
+          "work": coalesce(work, {}){ label, url, color, modelScale, modelPosition },
+          "skills": coalesce(skills, {}){ label, url, color, modelScale, modelPosition },
+          "contact": coalesce(contact, {}){ label, url, color, modelScale, modelPosition },
+          "about": coalesce(about, {}){ label, url, color, modelScale, modelPosition },
+          "blog": coalesce(blog, {}){ label, url, color, modelScale, modelPosition }
+        },
+        "linkRelics": coalesce(linkRelics, {}),
         sceneModels[]{
           ...,
           "modelFileUrl": modelFile.asset->url
@@ -54,14 +64,23 @@ export function usePortfolioData() {
     }
 
     fetchData()
-    // Light polling so Studio changes reflect without manual refresh.
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        portfolioCache = null
+        fetchData()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
     const interval = window.setInterval(() => {
       if (document.hidden) return
       fetchData()
-    }, 15000)
+    }, 10000)
 
     return () => {
       cancelled = true
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       window.clearInterval(interval)
     }
   }, [])

@@ -3,6 +3,7 @@ import { Play, BriefcaseBusiness, FolderKanban, GraduationCap, Sparkles, UserRou
 import { motion } from 'framer-motion'
 import { useAppStore } from '../../store/appStore'
 import { usePortfolioData } from '../../hooks/usePortfolioData'
+import { resolveNavSections } from '../../lib/resolvedSections'
 import { urlFor } from '../../lib/sanity'
 import { buildDisplaySkills, SkillIcon } from '../../lib/skillsDisplay'
 
@@ -129,14 +130,8 @@ const NormalMode = () => {
   const aboutText = portableToPlain(site.aboutContent)
   const contactRecipient = site.contactRecipientEmail || ''
   const contactLinks = Array.isArray(site.contactLinks) ? site.contactLinks : []
-  const sections = [
-    { id: 'about', label: 'About' },
-    { id: 'skills', label: 'Skills' },
-    { id: 'education', label: 'Education' },
-    { id: 'work', label: 'Work' },
-    { id: 'projects', label: 'Projects' },
-    { id: 'contact', label: 'Contact' },
-  ]
+  const sectionRadius = typeof data?.scene?.sectionRadius === 'number' ? data.scene.sectionRadius : 52
+  const sections = useMemo(() => resolveNavSections(data, sectionRadius), [data, sectionRadius])
   const topProjects = (data?.projects || []).slice(0, 12)
   const workGroups = useMemo(() => groupedWork(data?.experience || []), [data?.experience])
   const displaySkills = useMemo(() => buildDisplaySkills(data?.skills || []), [data?.skills])
@@ -202,10 +197,10 @@ const NormalMode = () => {
                 transition={{ duration: 0.6 }}
                 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-[1.05]"
               >
-                {site.title || 'CINEMATIC PORTFOLIO COMMAND CENTER'}
+                {site.title || 'Portfolio'}
               </motion.h1>
               <p className="text-engine-text-muted mt-3 max-w-3xl text-sm sm:text-base">
-                {site.description || 'Scroll through rich project stories, production timelines, skills, education, and dev updates. Every block is content-driven from your dashboard with motion-first UI.'}
+                {site.description || 'Interactive portfolio with projects, experience, and contact.'}
               </p>
             </div>
 
@@ -251,8 +246,8 @@ const NormalMode = () => {
             <UserRound className="text-sky-300" size={20} />
             <h2 className="text-2xl font-black tracking-wide text-engine-text">About Me</h2>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
-            <article className="engine-panel rounded-2xl p-5 border border-sky-200/15 ui-card-3d">
+          <div className="flex flex-col lg:grid lg:grid-cols-[280px_1fr] gap-6 items-center lg:items-stretch">
+            <article className="engine-panel rounded-2xl p-5 border border-sky-200/15 ui-card-3d w-1/2 lg:w-auto mx-auto lg:mx-0">
               <div className="aspect-square rounded-2xl overflow-hidden border border-white/15 bg-black/40">
                 {site.aboutPhoto ? (
                   <img src={urlFor(site.aboutPhoto).width(720).height(720).fit('crop').auto('format').url()} alt="About profile" className="w-full h-full object-cover" />
@@ -261,7 +256,7 @@ const NormalMode = () => {
                 )}
               </div>
             </article>
-            <article className="engine-panel rounded-2xl p-6 border border-sky-200/15 ui-card-3d">
+            <article className="engine-panel rounded-2xl p-6 border border-sky-200/15 ui-card-3d w-full lg:w-auto">
               <h3 className="text-xl font-black text-white mb-3">{site.aboutHeadline || 'My Journey'}</h3>
               <p className="text-sm text-engine-text-muted whitespace-pre-line leading-relaxed">
                 {aboutText || 'Add your About content from the dashboard (Site Settings -> About Me).'}

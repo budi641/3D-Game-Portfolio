@@ -13,22 +13,24 @@ import { usePerformanceTier } from '../../hooks/usePerformanceTier'
 import QuestModal from '../ui/QuestModal'
 import MobileTutorial from '../ui/MobileTutorial'
 import AchievementToast from '../ui/AchievementToast'
+import StatueContextPanel from '../ui/StatueContextPanel'
 
 const keyboardMap = [
   { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
   { name: 'backward', keys: ['ArrowDown', 'KeyS'] },
   { name: 'left', keys: ['ArrowLeft', 'KeyA'] },
   { name: 'right', keys: ['ArrowRight', 'KeyD'] },
-  { name: 'jump', keys: ['Space'] },
   { name: 'sprint', keys: ['ShiftLeft', 'ShiftRight'] },
 ]
 
 const GameMode = () => {
   const focusedSection = useAppStore((state) => state.focusedSection)
   const statueIndicators = useAppStore((state) => state.statueIndicators)
+  const extremeFpsMode = useAppStore((state) => state.extremeFpsMode)
   const { data } = usePortfolioData()
   const perfTier = usePerformanceTier()
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+  const showPcControls = !isMobile
   const showStatueIndicators = data?.scene?.showStatueIndicators === true
   const pendingAchievement = useAppStore((state) => state.pendingAchievement)
   const setPendingAchievement = useAppStore((state) => state.setPendingAchievement)
@@ -43,6 +45,7 @@ const GameMode = () => {
     <div className="w-full h-full min-h-[100dvh] relative">
       <QuestModal />
       <MobileTutorial />
+      <StatueContextPanel data={data} />
       <AchievementToast
         message={pendingAchievement?.message ?? ''}
         subtext={pendingAchievement?.subtext}
@@ -53,7 +56,7 @@ const GameMode = () => {
         <div className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }}>
         <Canvas
         shadows={false}
-        dpr={perfTier === 'low' ? [0.25, 1] : [1, 1]}
+        dpr={extremeFpsMode ? [0.25, 1] : (perfTier === 'low' ? [0.25, 1] : [1, 1])}
         gl={{
           antialias: false,
           powerPreference: 'high-performance',
@@ -89,15 +92,17 @@ const GameMode = () => {
         </button>
       </div>
 
-      {/* HUD Info */}
+      {/* HUD Info - PC controls hidden on mobile */}
       <div className="absolute bottom-6 left-6 flex flex-col gap-1 pointer-events-none select-none">
         <div className="text-[10px] font-mono text-engine-accent flex items-center gap-2">
            <span className="w-1.5 h-1.5 bg-engine-accent animate-pulse"></span>
            TRACKING_SYSTEM_ACTIVE
         </div>
-        <div className="text-[10px] font-mono text-engine-text-muted">
-          WASD TO MOVE | SHIFT TO SPRINT | SPACE TO JUMP
-        </div>
+        {showPcControls && (
+          <div className="text-[10px] font-mono text-engine-text-muted">
+            WASD TO MOVE | SHIFT TO SPRINT
+          </div>
+        )}
       </div>
 
       {showStatueIndicators && !focusedSection && (statueIndicators ?? []).length > 0 && (
