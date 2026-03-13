@@ -1,11 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { Play, BriefcaseBusiness, FolderKanban, GraduationCap, Sparkles, UserRound, X, ExternalLink, Linkedin, Github, FileText } from 'lucide-react'
+import { Play, BriefcaseBusiness, FolderKanban, GraduationCap, Sparkles, UserRound, X, ExternalLink, Linkedin, Github, FileText, BookOpen } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAppStore } from '../../store/appStore'
 import { usePortfolioData } from '../../hooks/usePortfolioData'
 import { resolveNavSections } from '../../lib/resolvedSections'
 import { urlFor } from '../../lib/sanity'
 import { buildDisplaySkills, SkillIcon } from '../../lib/skillsDisplay'
+import { StatueContentRenderer } from '../../world/StatueContentRenderer'
 
 function experienceVisual(job: any, fallbackProject: any) {
   return job?.logo || job?.image || job?.mainImage || job?.companyImage || fallbackProject?.mainImage || null
@@ -126,6 +127,7 @@ const NormalMode = () => {
   const [sending, setSending] = useState(false)
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' })
+  const [activeTab, setActiveTab] = useState<'portfolio' | 'blog'>('portfolio')
   const site = data?.siteSettings || {}
   const aboutText = portableToPlain(site.aboutContent)
   const contactRecipient = site.contactRecipientEmail || ''
@@ -215,24 +217,55 @@ const NormalMode = () => {
             </div>
           </div>
 
-          <nav className="flex flex-wrap gap-2">
-            {sections.map((section) => (
-              <a key={section.id} href={`#${section.id}`} className="text-[11px] uppercase tracking-[0.2em] px-3 py-1.5 rounded-full border border-sky-200/20 bg-slate-900/40 text-engine-text-muted hover:text-white hover:border-sky-300/45 transition-colors">
-                {section.label}
-              </a>
-            ))}
-          </nav>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap gap-2">
+              {sections.filter((s) => s.id !== 'blog').map((section) => (
+                <a
+                  key={section.id}
+                  href={`#${section.id}`}
+                  onClick={() => setActiveTab('portfolio')}
+                  className="text-[11px] uppercase tracking-[0.2em] px-3 py-1.5 rounded-full border border-sky-200/20 bg-slate-900/40 text-engine-text-muted hover:text-white hover:border-sky-300/45 transition-colors"
+                >
+                  {section.label}
+                </a>
+              ))}
+            </div>
+            <button
+              onClick={() => setActiveTab('blog')}
+              className={`text-[11px] uppercase tracking-[0.2em] px-3 py-1.5 rounded-full border transition-colors shrink-0 ${
+                activeTab === 'blog' ? 'border-orange-400/80 bg-orange-500/30 text-orange-200' : 'border-sky-200/20 bg-slate-900/40 text-engine-text-muted hover:text-white hover:border-sky-300/45'
+              }`}
+            >
+              <BookOpen size={12} className="inline mr-1 -mt-0.5" />
+              Blog
+            </button>
+          </div>
 
           <div className="flex flex-wrap gap-2.5">
-            <a href={linkedInLink?.url || '#'} target="_blank" rel="noreferrer" className="engine-button text-xs">
+            <a
+              href={linkedInLink?.url || '#'}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border border-[#0A66C2]/50 bg-[#0A66C2]/20 text-[#0A66C2] transition-all duration-200 hover:bg-[#0A66C2] hover:text-white hover:border-[#0A66C2] hover:shadow-lg hover:shadow-[#0A66C2]/30 hover:-translate-y-0.5"
+            >
               <Linkedin size={14} />
               LinkedIn
             </a>
-            <a href={githubLink?.url || '#'} target="_blank" rel="noreferrer" className="engine-button text-xs">
+            <a
+              href={githubLink?.url || '#'}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border border-purple-500/50 bg-purple-500 text-white transition-all duration-200 hover:bg-purple-400 hover:border-purple-400 hover:shadow-lg hover:shadow-purple-500/40 hover:-translate-y-0.5"
+            >
               <Github size={14} />
               GitHub
             </a>
-            <a href={resumeLink?.url || '#'} target="_blank" rel="noreferrer" className="engine-button text-xs">
+            <a
+              href={resumeLink?.url || '#'}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border border-green-500/50 bg-green-500/20 text-green-400 transition-all duration-200 hover:bg-green-500 hover:text-white hover:border-green-500 hover:shadow-lg hover:shadow-green-500/40 hover:-translate-y-0.5"
+            >
               <FileText size={14} />
               Resume
             </a>
@@ -241,6 +274,26 @@ const NormalMode = () => {
       </header>
 
       <main className="space-y-12 relative z-[1]">
+        {activeTab === 'blog' ? (
+          <section className="space-y-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <BookOpen className="text-orange-400" size={24} />
+                <h2 className="text-2xl font-black tracking-wide text-engine-text">Blog</h2>
+              </div>
+              <button
+                onClick={() => setActiveTab('portfolio')}
+                className="text-sm px-4 py-2 rounded-xl border border-sky-200/30 bg-slate-900/60 text-engine-text-muted hover:text-white hover:border-sky-300/50 transition-colors"
+              >
+                ← Back to Portfolio
+              </button>
+            </div>
+            <div className="engine-panel rounded-2xl p-5 sm:p-6 border border-sky-200/15 ui-card-3d">
+              <StatueContentRenderer type="blog" data={data} color="#f97316" />
+            </div>
+          </section>
+        ) : (
+        <>
         <section id="about" className="space-y-6">
           <div className="flex items-center gap-3">
             <UserRound className="text-sky-300" size={20} />
@@ -371,7 +424,7 @@ const NormalMode = () => {
                     {companyGroup.roles.map((job: any, roleIndex: number) => (
                       <div key={job._id || `${companyGroup.company}-${roleIndex}`} className="relative rounded-xl border border-white/10 bg-black/30 p-4">
                         <div className="absolute -left-[23px] top-5 w-3.5 h-3.5 rounded-full bg-sky-300 shadow-[0_0_12px_rgba(125,211,252,0.8)]" />
-                        <h4 className="text-lg font-black text-white">{job.role}</h4>
+                        <h4 className="text-lg font-black text-white whitespace-normal">{job.role}</h4>
                         <div className="text-sm text-engine-text-muted mt-0.5">{job.period}</div>
                         <p className="text-sm text-engine-text-muted leading-relaxed mt-2">{job.description}</p>
                         {Array.isArray(job.skills) && job.skills.length > 0 && (
@@ -520,6 +573,8 @@ const NormalMode = () => {
             </form>
           </div>
         </section>
+        </>
+        )}
 
         {selectedProject && (
           <div className="fixed inset-0 z-[999] bg-black/70 backdrop-blur-sm p-4 flex items-center justify-center">

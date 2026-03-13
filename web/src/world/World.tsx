@@ -459,9 +459,10 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
 
   const hasClickedAnyStatue = exploredStatueNames.length > 0
 
-  const linkPathCenterZ = sectionRadius - 16
-  const linkPathLength = sectionRadius + 32
   const linkPedestalZ = sectionRadius + 24
+  // Path from center (0,0,0) to plaza - same start as other section paths
+  const linkPathLength = linkPedestalZ
+  const linkPathCenterZ = linkPathLength / 2
   const sceneModels = Array.isArray(data?.scene?.sceneModels) ? data.scene.sceneModels : []
 
   if (loading && !data) return null
@@ -487,6 +488,24 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
           <meshStandardMaterial color="#05070a" roughness={1} />
         </mesh>
         <CuboidCollider args={[150, 0.05, 150]} position={[0, -0.05, 0]} />
+      </RigidBody>
+
+      {/* Circular start pad - where the player spawns */}
+      <RigidBody type="fixed" colliders={false} position={[0, 0.05, 0]}>
+        <mesh receiveShadow castShadow>
+          <cylinderGeometry args={[7, 7, 0.1, 64]} />
+          <meshStandardMaterial color="#0d1117" roughness={1} />
+        </mesh>
+        <mesh position={[0, 0.051, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[5.5, 6.2, performanceTier === 'low' ? 24 : 64]} />
+          <meshStandardMaterial
+            color="#38bdf8"
+            emissive="#38bdf8"
+            emissiveIntensity={6}
+            transparent
+            opacity={0.85}
+          />
+        </mesh>
       </RigidBody>
 
       {performanceTier === 'high' && (

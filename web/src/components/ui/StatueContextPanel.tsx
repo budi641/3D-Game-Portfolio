@@ -45,7 +45,7 @@ export default function StatueContextPanel({ data }: { data?: any }) {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="w-[min(96vw,560px)] max-h-[min(90vh,700px)] min-h-0 ui-context-shell rounded-2xl sm:rounded-[34px] flex flex-col overflow-hidden pointer-events-auto shrink-0"
+          className={`min-h-0 ui-context-shell rounded-2xl sm:rounded-[34px] flex flex-col overflow-hidden pointer-events-auto shrink-0 ${type === 'blog' ? 'w-[min(96vw,720px)] max-h-[min(92vh,850px)]' : 'w-[min(96vw,560px)] max-h-[min(90vh,700px)]'}`}
           style={{
             borderColor: `${color}66`,
             boxShadow: `0 0 30px ${hexToRgba(color, 0.22)}, 0 0 85px rgba(0,0,0,0.85)`,
@@ -62,7 +62,7 @@ export default function StatueContextPanel({ data }: { data?: any }) {
                 <div className="w-1.5 h-1.5 rounded-full animate-ping" style={{ backgroundColor: color }} />
                 <div className="text-[9px] font-mono tracking-[0.32em] uppercase opacity-50 text-white">Interactive Section Console</div>
               </div>
-              <h2 className="text-xl sm:text-4xl font-black text-white tracking-tight uppercase tabular-nums truncate max-w-[60vw] sm:max-w-none">{name}</h2>
+              <h2 className="text-xl sm:text-4xl font-black text-white uppercase tabular-nums truncate max-w-[60vw] sm:max-w-none">{name}</h2>
             </div>
             <button
               onClick={handleClose}

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { urlFor } from '../lib/sanity'
 import { buildDisplaySkills, SkillIcon } from '../lib/skillsDisplay'
 
@@ -15,6 +15,21 @@ function imageUrl(source: any, width = 800, height = 450) {
   if (!source) return null
   try {
     return urlFor(source).width(width).height(height).fit('crop').auto('format').url()
+  } catch {
+    return null
+  }
+}
+
+function imageUrlNoCrop(source: any, maxWidth = 1200, maxHeight = 1200) {
+  if (!source) return null
+  try {
+    return urlFor(source)
+      .ignoreImageParams()
+      .width(maxWidth)
+      .height(maxHeight)
+      .fit('max')
+      .auto('format')
+      .url()
   } catch {
     return null
   }
@@ -94,6 +109,11 @@ export function StatueContentRenderer({
   const [contactForm, setContactForm] = useState({ name: '', email: '', subject: '', message: '' })
   const [contactSending, setContactSending] = useState(false)
   const [contactStatus, setContactStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [expandedBlogId, setExpandedBlogId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (type !== 'blog') setExpandedBlogId(null)
+  }, [type])
 
   const submitContact = async (e: FormEvent) => {
     e.preventDefault()
@@ -197,7 +217,7 @@ export function StatueContentRenderer({
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-black text-white leading-tight text-base uppercase tracking-wide">{companyGroup.company}</h3>
+                  <h3 className="font-black text-white leading-tight text-base whitespace-normal">{companyGroup.company}</h3>
                 </div>
               </div>
               <div className="relative ml-1 pl-5">
@@ -207,7 +227,7 @@ export function StatueContentRenderer({
                     <div key={exp._id || `${companyGroup.company}-${idx}`} className="relative p-3 rounded-lg border border-white/10 bg-black/30">
                       <div className="absolute -left-[17px] top-4 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 10px ${hexToRgba(color, 0.85)}` }} />
                       <div className="text-[9px] font-mono text-white/40 mb-1">{exp.period}</div>
-                      <h4 className="font-black text-white leading-tight text-sm uppercase tracking-wide">{exp.role}</h4>
+                      <h4 className="font-black text-white leading-tight text-sm whitespace-normal">{exp.role}</h4>
                       <p className="text-[11px] text-white/35 line-clamp-4 leading-relaxed mt-1.5">{exp.description}</p>
                       {Array.isArray(exp.skills) && exp.skills.length > 0 && (
                         <div className="mt-2.5 flex flex-wrap gap-2">
@@ -327,28 +347,102 @@ export function StatueContentRenderer({
               }
             }
             const dateStr = formatDate(post.publishedAt)
+            const isExpanded = expandedBlogId === post._id
+
+            const expandedMediaWrapper = 'w-full flex justify-center bg-black/20 rounded-lg'
+            const expandedMediaImg = 'max-w-full max-h-[70vh] w-auto h-auto object-contain rounded-lg'
+            const MediaBlock = ({ item, idx, fullSize }: { item: any; idx: number; fullSize: boolean }) => (
+              <div key={`blog-media-${idx}`} className={`rounded-lg border border-white/10 bg-black/30 w-full min-w-0 ${fullSize ? 'overflow-visible' : 'overflow-hidden'}`}>
+                {item?.type === 'video' && item?.videoUrl ? (
+                  <div className={fullSize ? expandedMediaWrapper : ''}>
+                    <video
+                      src={item.videoUrl}
+                      controls
+                      className={fullSize ? expandedMediaImg : 'w-full h-40 object-cover'}
+                    />
+                  </div>
+                ) : item?.image ? (
+                  fullSize ? (
+                    <div className={expandedMediaWrapper}>
+                      <img
+                        src={imageUrlNoCrop(item.image, 1600, 2400)!}
+                        alt={item?.caption || 'Blog media'}
+                        className={expandedMediaImg}
+                      />
+                    </div>
+                  ) : (
+                    <img
+                      src={imageUrl(item.image, 640, 360)!}
+                      alt={item?.caption || 'Blog media'}
+                      className="w-full h-40 object-cover rounded-lg"
+                    />
+                  )
+                ) : item?.imageUrl ? (
+                  fullSize ? (
+                    <div className={expandedMediaWrapper}>
+                      <img
+                        src={item.imageUrl}
+                        alt={item?.caption || 'Blog media'}
+                        className={expandedMediaImg}
+                      />
+                    </div>
+                  ) : (
+                    <img
+                      src={item.imageUrl}
+                      alt={item?.caption || 'Blog media'}
+                      className="w-full h-40 object-cover rounded-lg"
+                    />
+                  )
+                ) : null}
+                {item?.caption && <div className="text-[10px] text-white/50 p-2">{item.caption}</div>}
+              </div>
+            )
+
             return (
-              <div key={post._id} className="p-4 ui-context-card space-y-3">
-                <h3 className="text-sm font-bold text-white">{post.title}</h3>
-                {dateStr && <div className="text-[10px] text-white/40 font-mono">{dateStr}</div>}
+              <div
+                key={post._id}
+                className={`ui-context-card transition-all ${isExpanded ? 'p-4 sm:p-5 overflow-visible' : 'p-4 cursor-pointer hover:border-white/20 active:scale-[0.99] overflow-hidden'}`}
+                onClick={() => !isExpanded && setExpandedBlogId(post._id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    if (!isExpanded) setExpandedBlogId(post._id)
+                  }
+                }}
+              >
+                <div className="flex justify-between items-start gap-2">
+                  <h3 className="text-sm font-bold text-white">{post.title}</h3>
+                  {isExpanded && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setExpandedBlogId(null)
+                      }}
+                      className="text-[10px] px-2 py-1 rounded border border-white/20 text-white/60 hover:text-white hover:bg-white/10 shrink-0"
+                    >
+                      Collapse
+                    </button>
+                  )}
+                </div>
+                {dateStr && <div className="text-[10px] text-white/40 font-mono mt-1">{dateStr}</div>}
                 {bodyText && (
-                  <p className="text-xs text-white/60 leading-relaxed whitespace-pre-wrap">{bodyText}</p>
+                  <p
+                    className={`text-xs text-white/60 leading-relaxed whitespace-pre-wrap mt-3 ${!isExpanded ? 'line-clamp-2' : ''}`}
+                  >
+                    {bodyText}
+                  </p>
                 )}
                 {media.length > 0 && (
-                  <div className="grid grid-cols-1 gap-2 mt-3">
-                    {media.slice(0, 6).map((item: any, idx: number) => (
-                      <div key={`blog-media-${idx}`} className="rounded-lg overflow-hidden border border-white/10 bg-black/30">
-                        {item?.type === 'video' && item?.videoUrl ? (
-                          <video src={item.videoUrl} controls className="w-full h-40 object-cover" />
-                        ) : item?.image ? (
-                          <img src={imageUrl(item.image, 640, 360)!} alt={item?.caption || 'Blog media'} className="w-full h-40 object-cover" />
-                        ) : item?.imageUrl ? (
-                          <img src={item.imageUrl} alt={item?.caption || 'Blog media'} className="w-full h-40 object-cover" />
-                        ) : null}
-                        {item?.caption && <div className="text-[10px] text-white/50 p-2">{item.caption}</div>}
-                      </div>
+                  <div className={`grid gap-2 min-w-0 w-full ${isExpanded ? 'grid-cols-1 mt-5' : 'grid-cols-2 sm:grid-cols-3 mt-3'}`}>
+                    {(isExpanded ? media : media.slice(0, 3)).map((item: any, idx: number) => (
+                      <MediaBlock key={`blog-media-${idx}`} item={item} idx={idx} fullSize={isExpanded} />
                     ))}
                   </div>
+                )}
+                {!isExpanded && (bodyText || media.length > 0) && (
+                  <div className="text-[9px] text-white/40 mt-2 font-mono">Click to expand</div>
                 )}
               </div>
             )
