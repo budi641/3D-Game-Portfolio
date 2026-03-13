@@ -314,12 +314,45 @@ export function StatueContentRenderer({
     case 'blog':
       return (
         <div className="space-y-4">
-          {(data.blog || []).slice(0, 6).map((post: any) => (
-            <div key={post._id} className="p-4 ui-context-card">
-              <h3 className="text-sm font-bold text-white">{post.title}</h3>
-              <div className="text-[10px] text-white/40 mt-1 font-mono">{post.publishedAt || 'Draft'}</div>
-            </div>
-          ))}
+          {(data.blog || []).slice(0, 6).map((post: any) => {
+            const bodyText = portableToPlain(post.body)
+            const media = Array.isArray(post.media) ? post.media : []
+            const formatDate = (d: string) => {
+              if (!d) return ''
+              try {
+                const dt = new Date(d)
+                return dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+              } catch {
+                return d
+              }
+            }
+            const dateStr = formatDate(post.publishedAt)
+            return (
+              <div key={post._id} className="p-4 ui-context-card space-y-3">
+                <h3 className="text-sm font-bold text-white">{post.title}</h3>
+                {dateStr && <div className="text-[10px] text-white/40 font-mono">{dateStr}</div>}
+                {bodyText && (
+                  <p className="text-xs text-white/60 leading-relaxed whitespace-pre-wrap">{bodyText}</p>
+                )}
+                {media.length > 0 && (
+                  <div className="grid grid-cols-1 gap-2 mt-3">
+                    {media.slice(0, 6).map((item: any, idx: number) => (
+                      <div key={`blog-media-${idx}`} className="rounded-lg overflow-hidden border border-white/10 bg-black/30">
+                        {item?.type === 'video' && item?.videoUrl ? (
+                          <video src={item.videoUrl} controls className="w-full h-40 object-cover" />
+                        ) : item?.image ? (
+                          <img src={imageUrl(item.image, 640, 360)!} alt={item?.caption || 'Blog media'} className="w-full h-40 object-cover" />
+                        ) : item?.imageUrl ? (
+                          <img src={item.imageUrl} alt={item?.caption || 'Blog media'} className="w-full h-40 object-cover" />
+                        ) : null}
+                        {item?.caption && <div className="text-[10px] text-white/50 p-2">{item.caption}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
           {!data.blog?.length && <div className="p-4 ui-context-card text-xs text-white/50">No blog entries synced yet.</div>}
         </div>
       )

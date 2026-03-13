@@ -116,9 +116,11 @@ function blocksFromParagraphs(paragraphs) {
 
 function categoryForSkill(name) {
   const n = name.toLowerCase()
-  if (n.includes('engine') || n.includes('graphics') || n.includes('vulkan') || n.includes('opengl')) return 'graphics'
-  if (n.includes('git') || n.includes('github')) return 'tools'
-  return 'programming'
+  if (n.includes('engine') || n.includes('blueprint') || n.includes('game')) return 'Game Development'
+  if (n.includes('react') || n.includes('typescript') || n.includes('javascript') || n.includes('web')) return 'Web Development'
+  if (n.includes('graphics') || n.includes('vulkan') || n.includes('opengl') || n.includes('blender') || n.includes('3d')) return '3D & Graphics'
+  if (n.includes('git') || n.includes('github') || n.includes('vite') || n.includes('sanity')) return 'Tools'
+  return 'General'
 }
 
 async function uploadImageIfExists(client, imagePathLike, cache) {

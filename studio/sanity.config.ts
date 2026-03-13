@@ -8,12 +8,16 @@ export default defineConfig({
   name: 'default',
   title: '3D Game Portfolio',
 
-  projectId: 'wsg4349i', // Updated project ID
+  projectId: 'wsg4349i',
   dataset: 'production',
 
   plugins: [deskTool(), visionTool(), colorInput()],
 
   schema: {
     types: schemaTypes,
+  },
+
+  document: {
+    actions: (prev) => prev, // Keep all default actions including Delete
   },
 })

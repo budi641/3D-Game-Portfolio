@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import { useAppStore } from '../../store/appStore'
 import { StatueContentRenderer } from '../../world/StatueContentRenderer'
 import { X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useSounds } from '../../hooks/useSounds'
 
 function hexToRgba(hex: string, alpha: number) {
   const safe = (hex || '').trim().replace('#', '')
@@ -17,17 +19,23 @@ export default function StatueContextPanel({ data }: { data?: any }) {
   const focusedStatueMetadata = useAppStore((state) => state.focusedStatueMetadata)
   const setFocusedSection = useAppStore((state) => state.setFocusedSection)
   const setFocusedStatueMetadata = useAppStore((state) => state.setFocusedStatueMetadata)
+  const { playPanelOpen, playPanelClose } = useSounds()
+
+  useEffect(() => {
+    if (focusedSection) playPanelOpen()
+  }, [focusedSection, playPanelOpen])
+
+  const handleClose = () => {
+    playPanelClose()
+    setFocusedSection(null)
+    setFocusedStatueMetadata(null)
+  }
 
   if (!focusedSection || !focusedStatueMetadata) return null
 
   const color = focusedStatueMetadata.color || '#3b82f6'
   const type = focusedStatueMetadata.type || 'projects'
   const name = focusedStatueMetadata.name || focusedSection
-
-  const handleClose = () => {
-    setFocusedSection(null)
-    setFocusedStatueMetadata(null)
-  }
 
   return (
     <AnimatePresence>

@@ -12,6 +12,7 @@ import { usePortfolioData } from '../../hooks/usePortfolioData'
 import { usePerformanceTier } from '../../hooks/usePerformanceTier'
 import QuestModal from '../ui/QuestModal'
 import MobileTutorial from '../ui/MobileTutorial'
+import PcTutorial from '../ui/PcTutorial'
 import AchievementToast from '../ui/AchievementToast'
 import StatueContextPanel from '../ui/StatueContextPanel'
 
@@ -27,6 +28,7 @@ const GameMode = () => {
   const focusedSection = useAppStore((state) => state.focusedSection)
   const statueIndicators = useAppStore((state) => state.statueIndicators)
   const extremeFpsMode = useAppStore((state) => state.extremeFpsMode)
+  const mobileResolutionBoost = useAppStore((state) => state.mobileResolutionBoost)
   const { data } = usePortfolioData()
   const perfTier = usePerformanceTier()
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
@@ -45,6 +47,7 @@ const GameMode = () => {
     <div className="w-full h-full min-h-[100dvh] relative">
       <QuestModal />
       <MobileTutorial />
+      <PcTutorial />
       <StatueContextPanel data={data} />
       <AchievementToast
         message={pendingAchievement?.message ?? ''}
@@ -56,7 +59,15 @@ const GameMode = () => {
         <div className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }}>
         <Canvas
         shadows={false}
-        dpr={extremeFpsMode ? [0.25, 1] : (perfTier === 'low' ? [0.25, 1] : [1, 1])}
+        dpr={
+          isMobile && mobileResolutionBoost
+            ? [1, 1]
+            : extremeFpsMode
+              ? [0.25, 1]
+              : perfTier === 'low'
+                ? [0.25, 1]
+                : [1, 1]
+        }
         gl={{
           antialias: false,
           powerPreference: 'high-performance',
@@ -76,7 +87,6 @@ const GameMode = () => {
         <PerspectiveCamera makeDefault position={[12, 12, 12]} fov={isMobile ? 62 : 48} />
         
         <color attach="background" args={['#1e293b']} />
-
       </Canvas>
         </div>
       </KeyboardControls>

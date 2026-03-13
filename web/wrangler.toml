@@ -1,7 +1,8 @@
 # Cloudflare Pages configuration
-# Used when deploying via: npm run deploy
-# For Git-based deploys, configure in the Cloudflare dashboard instead.
+# Deploy: cd web && npm run deploy
 
-name = "3d-game-portfolio"
+name = "ameen"
 pages_build_output_dir = "dist"
 compatibility_date = "2024-01-01"
+
+# Deploys to https://ameen.pages.dev

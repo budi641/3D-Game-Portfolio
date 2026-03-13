@@ -4,35 +4,40 @@ import { useAppStore } from '../store/appStore'
 
 const FPS_SAMPLES = 30
 const FPS_LOW_THRESHOLD = 55
+const FPS_HIGH_THRESHOLD = 60
 const FRAMES_TO_DROP = 3
 const FPS_UPDATE_INTERVAL = 30
+const SUSTAINED_HIGH_DURATION = 5 // seconds at 60+ FPS (mobile only: bump resolution to 100%)
 
 const EXTREME_FPS_THRESHOLD = 20
 const EXTREME_LOW_DURATION = 3
 const LARGE_DELTA_THRESHOLD = 0.2 // Skip frames after tab return (rAF can spike)
 
+const isMobile = () => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+
 /**
- * Measures FPS and degrades performance one-way only (never recovers until page refresh).
- * - Start at high performance.
+ * Measures FPS and adapts quality.
  * - If FPS < 55 for FRAMES_TO_DROP consecutive samples → switch to low.
- * - If FPS < 20 for 3+ seconds (while in low) → switch to extreme (25% res, hide decorative models).
- * - No recovery: only a full page refresh returns to high.
- * - Skips checks when tab is hidden; resets counters on visibility change to avoid false degradation.
+ * - Mobile only: if FPS >= 60 for 5 seconds → bump resolution to 100%.
+ * - Extreme mode: FPS < 20 for 3+ seconds (while in low) → 25% res, hide decorative models.
  */
 export function AdaptivePerformanceMonitor() {
   const setPerformanceTier = useAppStore((state) => state.setPerformanceTier)
   const setFps = useAppStore((state) => state.setFps)
   const setExtremeFpsMode = useAppStore((state) => state.setExtremeFpsMode)
+  const setMobileResolutionBoost = useAppStore((state) => state.setMobileResolutionBoost)
   const deltas = useRef<number[]>([])
   const lowFrames = useRef(0)
   const frameCount = useRef(0)
   const extremeLowTime = useRef(0)
+  const sustainedHighTime = useRef(0)
 
   useEffect(() => {
     const onVisibilityChange = () => {
       if (document.hidden) {
         lowFrames.current = 0
         extremeLowTime.current = 0
+        sustainedHighTime.current = 0
         deltas.current = []
       }
     }
@@ -59,23 +64,38 @@ export function AdaptivePerformanceMonitor() {
 
     const tier = useAppStore.getState().performanceTier
     const extremeMode = useAppStore.getState().extremeFpsMode
+    const mobileBoost = useAppStore.getState().mobileResolutionBoost
 
-    // One-way: high → low when FPS drops below threshold for N frames
+    // Degrade: high → low when FPS drops below threshold for N frames
     if (fps < FPS_LOW_THRESHOLD && tier === 'high') {
       lowFrames.current++
+      sustainedHighTime.current = 0
       if (lowFrames.current >= FRAMES_TO_DROP) {
         setPerformanceTier('low')
         lowFrames.current = 0
       }
+      if (isMobile() && mobileBoost) setMobileResolutionBoost(false)
     } else {
       lowFrames.current = 0
+      if (fps >= FPS_HIGH_THRESHOLD) {
+        sustainedHighTime.current += delta
+        if (sustainedHighTime.current >= SUSTAINED_HIGH_DURATION) {
+          setPerformanceTier('high')
+          setExtremeFpsMode(false)
+          if (isMobile()) setMobileResolutionBoost(true)
+        }
+      } else {
+        sustainedHighTime.current = 0
+        if (isMobile() && mobileBoost) setMobileResolutionBoost(false)
+      }
     }
 
-    // One-way: low → extreme when FPS < 20 for 3+ seconds (no recovery until refresh)
+    // Extreme: low → extreme when FPS < 20 for 3+ seconds
     if (!extremeMode && fps < EXTREME_FPS_THRESHOLD) {
       extremeLowTime.current += delta
       if (extremeLowTime.current >= EXTREME_LOW_DURATION) {
         setExtremeFpsMode(true)
+        if (isMobile()) setMobileResolutionBoost(false)
       }
     } else {
       extremeLowTime.current = 0

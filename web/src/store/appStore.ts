@@ -64,8 +64,18 @@ interface AppState {
   extremeFpsMode: boolean
   setExtremeFpsMode: (enabled: boolean) => void
 
+  /** Mobile only: true when FPS 60+ for 5 sec – bumps resolution to 100% */
+  mobileResolutionBoost: boolean
+  setMobileResolutionBoost: (enabled: boolean) => void
+
   mobileTutorialDismissed: boolean
   setMobileTutorialDismissed: (dismissed: boolean) => void
+
+  pcTutorialDismissed: boolean
+  setPcTutorialDismissed: (dismissed: boolean) => void
+
+  soundEnabled: boolean
+  setSoundEnabled: (enabled: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -82,7 +92,9 @@ export const useAppStore = create<AppState>((set) => ({
         // Performance tier and extreme mode: never reset on mode switch; only page refresh restores high
         performanceTier: mode === 'game' ? state.performanceTier : state.performanceTier,
         extremeFpsMode: mode === 'game' ? state.extremeFpsMode : state.extremeFpsMode,
+        mobileResolutionBoost: mode === 'game' ? state.mobileResolutionBoost : state.mobileResolutionBoost,
         mobileTutorialDismissed: mode === 'game' ? false : state.mobileTutorialDismissed,
+        pcTutorialDismissed: mode === 'game' ? false : state.pcTutorialDismissed,
       }
     })
   },
@@ -143,6 +155,27 @@ export const useAppStore = create<AppState>((set) => ({
   extremeFpsMode: false,
   setExtremeFpsMode: (enabled) => set({ extremeFpsMode: enabled }),
 
+  mobileResolutionBoost: false,
+  setMobileResolutionBoost: (enabled) => set({ mobileResolutionBoost: enabled }),
+
   mobileTutorialDismissed: false,
   setMobileTutorialDismissed: (dismissed) => set({ mobileTutorialDismissed: dismissed }),
+
+  pcTutorialDismissed: false,
+  setPcTutorialDismissed: (dismissed) => set({ pcTutorialDismissed: dismissed }),
+
+  soundEnabled: (() => {
+    try {
+      const v = localStorage.getItem('portfolio-sound-enabled')
+      return v === null ? true : v === 'true'
+    } catch {
+      return true
+    }
+  })(),
+  setSoundEnabled: (enabled) => {
+    try {
+      localStorage.setItem('portfolio-sound-enabled', String(enabled))
+    } catch {}
+    set({ soundEnabled: enabled })
+  },
 }))

@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "optimize-models": "node scripts/optimize-models.mjs",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name=3d-game-portfolio"
+    "optimize-dist-models": "node scripts/optimize-dist-models.mjs",
+    "deploy": "npm run build && npm run optimize-dist-models && wrangler pages deploy dist --project-name=ameen"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

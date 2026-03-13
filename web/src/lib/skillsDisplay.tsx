@@ -23,25 +23,6 @@ type DisplaySkill = {
   _id?: string
 }
 
-const REQUIRED_SKILLS: DisplaySkill[] = [
-  { title: 'Game Design', category: 'Game Development' },
-  { title: 'Unreal Engine', category: 'Game Development' },
-  { title: 'C++', category: 'Game Development' },
-  { title: 'JavaScript', category: 'Web Development' },
-  { title: 'TypeScript', category: 'Web Development' },
-  { title: 'React', category: 'Web Development' },
-  { title: 'Three.js', category: '3D & Graphics' },
-  { title: 'React Three Fiber', category: '3D & Graphics' },
-  { title: 'Rapier Physics', category: '3D & Graphics' },
-  { title: 'Sanity CMS', category: 'Tools' },
-  { title: 'Tailwind CSS', category: 'Web Development' },
-  { title: 'Framer Motion', category: 'Web Development' },
-  { title: 'Vite', category: 'Tools' },
-  { title: 'HTML5', category: 'Web Development' },
-  { title: 'Node.js', category: 'Tools' },
-  { title: 'Blender', category: '3D & Graphics' },
-]
-
 function normalizeSkill(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ')
 }
@@ -57,12 +38,6 @@ export function buildDisplaySkills(skills: any[]): DisplaySkill[] {
       merged.set(key, { _id: skill?._id || `cms-${idx}`, title, category })
     }
   })
-
-  REQUIRED_SKILLS.forEach((skill, idx) => {
-    const key = normalizeSkill(skill.title)
-    if (!merged.has(key)) merged.set(key, { ...skill, _id: `required-${idx}` })
-  })
-
   return Array.from(merged.values())
 }
 

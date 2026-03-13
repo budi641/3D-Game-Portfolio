@@ -8,6 +8,32 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect } from 'react'
 import { usePortfolioData } from './hooks/usePortfolioData'
 import { preloadGameModels } from './lib/preloadModels'
+import { urlFor } from './lib/sanity'
+
+function setOrCreateMeta(
+  attr: 'name' | 'property',
+  key: string,
+  content: string
+) {
+  const selector = attr === 'name' ? `meta[name="${key}"]` : `meta[property="${key}"]`
+  let el = document.querySelector(selector) as HTMLMetaElement | null
+  if (!el) {
+    el = document.createElement('meta')
+    el.setAttribute(attr, key)
+    document.head.appendChild(el)
+  }
+  el.setAttribute('content', content)
+}
+
+function setOrCreateLink(rel: string, href: string) {
+  let el = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null
+  if (!el) {
+    el = document.createElement('link')
+    el.setAttribute('rel', rel)
+    document.head.appendChild(el)
+  }
+  el.setAttribute('href', href)
+}
 
 function App() {
   const mode = useAppStore((state) => state.mode)
@@ -19,19 +45,33 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const title = data?.siteSettings?.title || '3D Game Portfolio'
+    const site = data?.siteSettings
+    const title = site?.title || 'Abdelrahman Ameen 3D Game Dev Portfolio'
     const description =
-      data?.siteSettings?.description || 'Interactive game-style portfolio with playable media, projects, and contact.'
+      site?.description || 'Game developer portfolio showcasing projects, experience, and contact. Abdelrahman Ameen.'
+    const ogTitle = site?.ogTitle || title
+    const ogDescription = site?.ogDescription || description
+    const ogImage = site?.ogImage ? urlFor(site.ogImage).width(1200).height(630).fit('crop').auto('format').url() : ''
+    const keywords = site?.keywords || ''
+    const canonicalUrl = site?.canonicalUrl || ''
 
     document.title = title
-    let meta = document.querySelector('meta[name="description"]')
-    if (!meta) {
-      meta = document.createElement('meta')
-      meta.setAttribute('name', 'description')
-      document.head.appendChild(meta)
-    }
-    meta.setAttribute('content', description)
-  }, [data?.siteSettings?.title, data?.siteSettings?.description])
+    setOrCreateMeta('name', 'description', description)
+    if (keywords) setOrCreateMeta('name', 'keywords', keywords)
+
+    setOrCreateMeta('property', 'og:title', ogTitle)
+    setOrCreateMeta('property', 'og:description', ogDescription)
+    setOrCreateMeta('property', 'og:type', 'website')
+    if (ogImage) setOrCreateMeta('property', 'og:image', ogImage)
+    if (canonicalUrl) setOrCreateMeta('property', 'og:url', canonicalUrl)
+
+    setOrCreateMeta('name', 'twitter:card', 'summary_large_image')
+    setOrCreateMeta('name', 'twitter:title', ogTitle)
+    setOrCreateMeta('name', 'twitter:description', ogDescription)
+    if (ogImage) setOrCreateMeta('name', 'twitter:image', ogImage)
+
+    if (canonicalUrl) setOrCreateLink('canonical', canonicalUrl)
+  }, [data?.siteSettings])
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-engine-bg font-engine text-engine-text">

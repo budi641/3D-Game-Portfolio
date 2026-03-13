@@ -12,8 +12,11 @@ const studioConfig = defineConfig({
   basePath: '/studio',
   plugins: [deskTool(), visionTool(), colorInput()],
   schema: {
-    // Reuse the existing Studio schemas from /studio/schemaTypes
     types: schemaTypes,
+  },
+
+  document: {
+    actions: (prev) => prev, // Keep all default actions including Delete for blog
   },
 })
 

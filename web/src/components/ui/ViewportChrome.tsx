@@ -1,9 +1,9 @@
-import { Square, Settings, Maximize, RefreshCw, Activity, Cpu } from 'lucide-react'
+import { Square, Settings, Maximize, RefreshCw, Activity, Cpu, Volume2, VolumeX } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { motion } from 'framer-motion'
 
 const ViewportChrome = () => {
-  const { setMode, triggerRespawn, fps } = useAppStore()
+  const { setMode, triggerRespawn, fps, soundEnabled, setSoundEnabled } = useAppStore()
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
 
   return (
@@ -66,6 +66,13 @@ const ViewportChrome = () => {
 
       {/* Right: Settings */}
       <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+        <button
+          onClick={() => setSoundEnabled(!soundEnabled)}
+          className="w-9 h-9 flex items-center justify-center text-white/50 hover:text-blue-400 hover:bg-blue-400/10 rounded-xl transition-colors"
+          title={soundEnabled ? 'Mute sounds' : 'Enable sounds'}
+        >
+          {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} className="text-white/30" />}
+        </button>
         <div className="flex items-center gap-1">
           <button className="w-9 h-9 flex items-center justify-center text-white/50 hover:text-blue-400 hover:bg-blue-400/10 rounded-xl transition-colors">
             <Settings size={18} />

@@ -5,6 +5,7 @@ import type { PerformanceTier } from '../hooks/usePerformanceTier'
 import { useFrame } from '@react-three/fiber'
 import { useAppStore } from '../store/appStore'
 import { usePortfolioData } from '../hooks/usePortfolioData'
+import { useSounds } from '../hooks/useSounds'
 import { RigidBody, CuboidCollider } from '@react-three/rapier'
 import Statue from './Statue'
 import CdnAnimatedModel from './CdnAnimatedModel'
@@ -112,6 +113,7 @@ function LinkRelic({
   renderStyle = 'pbr',
   performanceTier = 'high',
   totalDiscoverables = 10,
+  onPlayClick,
 }: {
   label: string
   url: string
@@ -129,6 +131,7 @@ function LinkRelic({
   renderStyle?: 'pbr' | 'cel'
   performanceTier?: PerformanceTier
   totalDiscoverables?: number
+  onPlayClick?: () => void
 }) {
   const addExploredStatue = useAppStore((state) => state.addExploredStatue)
   const exploredStatueNames = useAppStore((state) => state.exploredStatueNames)
@@ -162,19 +165,6 @@ function LinkRelic({
       if (isNowNearby !== nearbyRef.current) {
         nearbyRef.current = isNowNearby
         setNearby(isNowNearby)
-        if (isNowNearby && !discoveredRef.current) {
-          discoveredRef.current = true
-          const wasNew = !exploredStatueNames.includes(label)
-          if (wasNew) {
-            addExploredStatue(label)
-            const newCount = exploredStatueNames.length + 1
-            if (newCount >= totalDiscoverables) {
-              setPendingAchievement({ message: 'Master Explorer', subtext: 'All statues and links discovered!', isBig: true })
-            } else {
-              setPendingAchievement({ message: `Discovered: ${label}`, subtext: `${newCount}/${totalDiscoverables} discovered`, isBig: false })
-            }
-          }
-        }
       }
 
       const rawNear = THREE.MathUtils.clamp(
@@ -268,6 +258,20 @@ function LinkRelic({
           onPointerOut={() => setHovered(false)}
           onClick={(e) => {
             e.stopPropagation()
+            onPlayClick?.()
+            if (!discoveredRef.current) {
+              discoveredRef.current = true
+              const wasNew = !exploredStatueNames.includes(label)
+              if (wasNew) {
+                addExploredStatue(label)
+                const newCount = exploredStatueNames.length + 1
+                if (newCount >= totalDiscoverables) {
+                  setPendingAchievement({ message: 'Master Explorer', subtext: 'All statues and links discovered!', isBig: true })
+                } else {
+                  setPendingAchievement({ message: `Discovered: ${label}`, subtext: `${newCount}/${totalDiscoverables} discovered`, isBig: false })
+                }
+              }
+            }
             window.open(url, '_blank', 'noopener,noreferrer')
           }}
         >
@@ -411,6 +415,7 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
   const setTotalStatueCount = useAppStore((state) => state.setTotalStatueCount)
   const setPendingAchievement = useAppStore((state) => state.setPendingAchievement)
   const extremeFpsMode = useAppStore((state) => state.extremeFpsMode)
+  const { playClick } = useSounds()
   const { data, loading } = usePortfolioData()
   const renderStyle = (data?.scene?.renderStyle === 'pbr' ? 'pbr' : 'cel') as 'pbr' | 'cel'
   const sectionRadius = typeof data?.scene?.sectionRadius === 'number' ? data.scene.sectionRadius : 52
@@ -445,11 +450,14 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
   }
 
   const handleStatueClick = (section: { name: string; archetype: string; color: string }) => {
+    playClick()
     const name = section.name
     setFocusedSection(name)
     setFocusedStatueMetadata({ name, type: section.archetype, color: section.color })
     handleStatueDiscovery(name)
   }
+
+  const hasClickedAnyStatue = exploredStatueNames.length > 0
 
   const linkPathCenterZ = sectionRadius - 16
   const linkPathLength = sectionRadius + 32
@@ -464,7 +472,7 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
       <pointLight position={[0, 20, 0]} intensity={2} color="#3b82f6" />
       <directionalLight 
         position={[25, 50, 25]} 
-        intensity={1}
+        intensity={1} 
         castShadow={performanceTier === 'high'}
         shadow-mapSize={performanceTier === 'low' ? [256, 256] : [512, 512]}
       />
@@ -482,17 +490,17 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
       </RigidBody>
 
       {performanceTier === 'high' && (
-        <Grid
-          infiniteGrid
+      <Grid
+        infiniteGrid
           fadeDistance={130}
-          fadeStrength={10}
-          cellSize={1}
-          sectionSize={10}
+        fadeStrength={10}
+        cellSize={1}
+        sectionSize={10}
           sectionThickness={1}
-          sectionColor="#1e293b"
-          cellColor="#0f172a"
-          position={[0, 0.01, 0]}
-        />
+        sectionColor="#1e293b"
+        cellColor="#0f172a"
+        position={[0, 0.01, 0]}
+      />
       )}
 
       {/* Roads and Sectors */}
@@ -560,7 +568,7 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
                 interactionDistance={section.statueInteractionDistance}
                 performanceTier={performanceTier}
                 onClick={() => handleStatueClick(section)}
-                onNearby={() => handleStatueDiscovery(section.name)}
+                showClickHint={!hasClickedAnyStatue}
               />
             </group>
           </group>
@@ -576,14 +584,14 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
         <mesh position={[0, 0.026, 0]}>
           <boxGeometry args={[0.1, 0.001, linkPathLength]} />
           <meshStandardMaterial color="#60a5fa" emissive="#60a5fa" emissiveIntensity={4} />
-        </mesh>
-      </RigidBody>
+              </mesh>
+            </RigidBody>
       <RigidBody type="fixed" colliders={false} position={[0, 0.05, linkPedestalZ]}>
         <mesh receiveShadow castShadow>
           <boxGeometry args={[28, 0.1, 14]} />
           <meshStandardMaterial color="#0d1117" roughness={1} />
-        </mesh>
-      </RigidBody>
+            </mesh>
+          </RigidBody>
 
       {/* Tiny interactive link relics - always visible */}
       {linkRelics.map((item: LinkRelicConfig) => (
@@ -605,6 +613,7 @@ const World = ({ performanceTier = 'high' }: { performanceTier?: PerformanceTier
           glowIntensity={item.glowIntensity}
           totalDiscoverables={totalDiscoverables}
           performanceTier={performanceTier}
+          onPlayClick={playClick}
         />
       ))}
 

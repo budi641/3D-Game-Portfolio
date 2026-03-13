@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Trophy, Star } from 'lucide-react'
+import { useSounds } from '../../hooks/useSounds'
 
 interface AchievementToastProps {
   message: string
@@ -10,6 +12,16 @@ interface AchievementToastProps {
 }
 
 export default function AchievementToast({ message, subtext, isBig, visible, onComplete }: AchievementToastProps) {
+  const { playAchievement } = useSounds()
+  const prevVisible = useRef(false)
+
+  useEffect(() => {
+    if (visible && !prevVisible.current) {
+      playAchievement(isBig)
+    }
+    prevVisible.current = visible
+  }, [visible, isBig, playAchievement])
+
   return (
     <AnimatePresence>
       {visible && (

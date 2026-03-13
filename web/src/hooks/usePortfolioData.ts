@@ -23,10 +23,17 @@ export function usePortfolioData() {
         }
       },
       "sections": *[_type == "section"] | order(order asc),
-      "skills": *[_type == "skill"] | order(category asc),
+      "skills": *[_type == "skill"] | order(order asc, category asc, title asc),
       "experience": *[_type == "experience"] | order(period desc),
       "education": *[_type == "education"],
-      "blog": *[_type == "blog"] | order(publishedAt desc),
+      "blog": *[_type == "blog"] | order(publishedAt desc){
+        ...,
+        media[]{
+          ...,
+          "imageUrl": image.asset->url,
+          "videoUrl": video.asset->url
+        }
+      },
       "siteSettings": *[_type == "siteSettings"] | order(_updatedAt desc)[0],
       "character": *[_type == "character"] | order(_updatedAt desc)[0],
       "scene": *[_type == "scene"] | order(_updatedAt desc)[0]{

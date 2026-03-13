@@ -27,7 +27,7 @@ interface StatueProps {
   interactionDistance?: number
   performanceTier?: PerformanceTier
   onClick: () => void
-  onNearby?: (name: string) => void
+  showClickHint?: boolean
 }
 
 const TYPE_MODEL_MAP: Record<string, { modelId: string; scale: number; rotationY?: number; playAnimation?: boolean }> = {
@@ -60,7 +60,7 @@ const Statue = ({
   interactionDistance = 12,
   performanceTier = 'high',
   onClick,
-  onNearby,
+  showClickHint = false,
 }: StatueProps) => {
   const [hovered, setHovered] = useState(false)
   const [nearby, setNearby] = useState(false)
@@ -151,7 +151,6 @@ const Statue = ({
       if (isNowNearby !== nearbyRef.current) {
         nearbyRef.current = isNowNearby
         setNearby(isNowNearby)
-        if (isNowNearby) onNearby?.(name)
       }
 
       const nearTarget = isNowNearby ? 1 : 0
@@ -206,6 +205,9 @@ const Statue = ({
     }
   })
 
+  const isTouchPrimary = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+  const clickHintText = isTouchPrimary ? 'Tap me' : 'Click me'
+
   return (
     <group position={position} name={`statue-${name}`}>
       {/* Ring: fixed size, independent of model scale - sits at platform level */}
@@ -220,12 +222,19 @@ const Statue = ({
           blending={THREE.AdditiveBlending}
         />
       </mesh>
-      <group
-        ref={groupRef}
+
+      {/* Invisible hitbox: ring-sized cylinder for easy clicking (no need to hit the model) */}
+      <mesh
+        position={[0, 1, 0]}
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
         onClick={onClick}
       >
+        <cylinderGeometry args={[4.5, 4.5, 2.5, 32]} />
+        <meshBasicMaterial visible={false} />
+      </mesh>
+
+      <group ref={groupRef}>
         {/* Model only - scaling applied here, ring is separate */}
         <group ref={coreRef}>
           {renderStatueVisual}
@@ -244,7 +253,15 @@ const Statue = ({
             pointerEvents: 'none'
           }}
         >
-          <div className="relative group">
+          <div className="relative group flex flex-col items-center">
+            {showClickHint && nearby && (
+              <div
+                className="text-2xl sm:text-3xl font-black uppercase tracking-widest mb-3 px-6 py-3 rounded-xl text-white bg-slate-900/95 border-2 border-sky-500/50 animate-bounce"
+                style={{ boxShadow: '0 0 24px rgba(56, 189, 248, 0.5), 0 0 48px rgba(14, 165, 233, 0.3)' }}
+              >
+                {clickHintText}
+              </div>
+            )}
             <div
               className="px-7 py-2.5 bg-black/92 backdrop-blur-3xl border-l-[3px] rounded-xl shadow-[0_0_44px_rgba(0,0,0,0.6)] flex flex-col items-center"
               style={{ borderColor: color }}

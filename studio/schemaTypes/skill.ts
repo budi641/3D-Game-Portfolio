@@ -30,18 +30,28 @@ export default {
     },
     {
       name: 'category',
-      title: 'Classification',
+      title: 'Category',
       type: 'string',
       group: 'details',
+      description: 'Group for display in the skills matrix.',
       options: {
         list: [
-          { title: 'Programming', value: 'programming' },
-          { title: 'Design', value: 'design' },
-          { title: 'Graphics & VFX', value: 'graphics' },
-          { title: 'Game Production', value: 'production' },
-          { title: 'Tools & Architecture', value: 'tools' },
+          { title: 'Game Development', value: 'Game Development' },
+          { title: 'Web Development', value: 'Web Development' },
+          { title: '3D & Graphics', value: '3D & Graphics' },
+          { title: 'Tools', value: 'Tools' },
+          { title: 'Programming', value: 'Programming' },
+          { title: 'Design', value: 'Design' },
+          { title: 'General', value: 'General' },
         ],
       },
+    },
+    {
+      name: 'order',
+      title: 'Display Order',
+      type: 'number',
+      group: 'details',
+      description: 'Lower numbers appear first. Leave empty for alphabetical.',
     }
   ],
   preview: {
